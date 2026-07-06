@@ -1,0 +1,72 @@
+services:
+  database:
+    image: postgres:alpine
+    container_name: postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 3s
+      timeout: 3s 
+      retries: 5 
+      start_period: 3s
+    volumes:
+      - data:/var/lib/postgresql
+
+  migrator:
+    image: my-financials-migrator:alpine
+    container_name: migrator
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+    build:
+      context: migrator
+      dockerfile: dockerfile
+
+  backend:
+    image: my-financials-backend:alpine
+    container_name: backend
+    restart: unless-stopped
+    depends_on:
+      database:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+    expose:
+      - "${BACKEND_PORT}"
+    environment:
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      BACKEND_PORT: ${BACKEND_PORT}
+    build:
+      context: backend
+      dockerfile: dockerfile
+  
+  web:
+    image: nginx:alpine
+    container_name: web
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      - WEB_PORT=${WEB_PORT}
+      - BACKEND_PORT=${BACKEND_PORT}
+    volumes:
+      - ./nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+    ports:
+      - "${WEB_PORT}:${WEB_PORT}"
+
+volumes:
+  data:
