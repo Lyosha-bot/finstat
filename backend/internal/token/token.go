@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	TOKEN_ISSUER    = "auth.my-financials"
+	TOKEN_ISSUER    = "finstat"
 	TOKEN_LIFE_TIME = 20 // В минутах
 )
 
