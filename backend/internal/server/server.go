@@ -111,5 +111,5 @@ func (s *Server) login(c *gin.Context) {
 		true,
 	)
 
-	c.JSON(http.StatusOK, gin.H{"message": "Успешная авторизация", "token": newToken})
+	c.JSON(http.StatusOK, gin.H{"message": "Успешная авторизация"})
 }
