@@ -1,3 +1,3 @@
 # frontend
 
-React.js frontend.
+Vite React.js frontend.

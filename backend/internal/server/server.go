@@ -4,9 +4,10 @@ import (
 	"log"
 	"net/http"
 
-	ewrap "auth.my-financials/internal/lib"
-	"auth.my-financials/internal/repository"
-	"auth.my-financials/internal/token"
+	ewrap "finstat/internal/lib"
+	"finstat/internal/repository"
+	"finstat/internal/token"
+
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 )

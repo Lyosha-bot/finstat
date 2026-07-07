@@ -17,7 +17,7 @@ services:
       - data:/var/lib/postgresql
 
   migrator:
-    image: my-financials-migrator:alpine
+    image: finstat-migrator
     container_name: migrator
     depends_on:
       database:
@@ -33,7 +33,7 @@ services:
       dockerfile: dockerfile
 
   backend:
-    image: my-financials-backend:alpine
+    image: finstat-backend
     container_name: backend
     restart: unless-stopped
     depends_on:
@@ -53,6 +53,19 @@ services:
     build:
       context: backend
       dockerfile: dockerfile
+
+  frontend:
+    image: finstat-frontend
+    container_name: frontend
+    restart: unless-stopped
+    expose:
+      - "${FRONTEND_PORT}"
+    build:
+      context: frontend
+      dockerfile: dockerfile
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
   
   web:
     image: nginx:alpine
@@ -63,6 +76,7 @@ services:
     environment:
       - WEB_PORT=${WEB_PORT}
       - BACKEND_PORT=${BACKEND_PORT}
+      - FRONTEND_PORT=${FRONTEND_PORT}
     volumes:
       - ./nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
     ports:

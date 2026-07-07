@@ -4,9 +4,9 @@ import (
 	"log"
 	"os"
 
-	ewrap "auth.my-financials/internal/lib"
-	"auth.my-financials/internal/repository"
-	"auth.my-financials/internal/server"
+	ewrap "finstat/internal/lib"
+	"finstat/internal/repository"
+	"finstat/internal/server"
 )
 
 func main() {

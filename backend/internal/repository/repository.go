@@ -7,7 +7,8 @@ import (
 	"context"
 	"fmt"
 
-	ewrap "auth.my-financials/internal/lib"
+	ewrap "finstat/internal/lib"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 

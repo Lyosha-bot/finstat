@@ -1,4 +1,4 @@
-module auth.my-financials
+module finstat
 
 go 1.26.4
 
