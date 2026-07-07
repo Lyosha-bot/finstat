@@ -18,3 +18,5 @@
 docker compose build
 docker compose up
 ```
+
+После этого в браузере достаточно написать `localhost:8080`

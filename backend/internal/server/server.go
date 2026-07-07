@@ -12,9 +12,12 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+const TOKEN_LIFE_TIME = 20 // В минутах
+
 type Server struct {
-	postgresClient *repository.Client
+	host           string
 	jwt_secret     []byte
+	postgresClient *repository.Client
 }
 
 type UserData struct {
@@ -22,15 +25,16 @@ type UserData struct {
 	Password string `json:"password" binding:"required,min=5,max=30"`
 }
 
-func NewServer(postgres_creds repository.Credentials, jwt_secret string) (*Server, error) {
+func NewServer(host, jwt_secret string, postgres_creds repository.Credentials) (*Server, error) {
 	db_client, err := repository.NewClient(postgres_creds)
 	if err != nil {
 		return nil, ewrap.Wrap("Couldn't create server", err)
 	}
 
 	return &Server{
-		postgresClient: db_client,
+		host:           host,
 		jwt_secret:     []byte(jwt_secret),
+		postgresClient: db_client,
 	}, nil
 }
 
@@ -90,12 +94,22 @@ func (s *Server) login(c *gin.Context) {
 		return
 	}
 
-	newToken, err := token.NewToken(user.ID, s.jwt_secret)
+	newToken, err := token.NewToken(user.ID, s.jwt_secret, TOKEN_LIFE_TIME)
 	if err != nil {
 		log.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка авторизации"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Успешная авторизация", "token": newToken})
+	c.SetCookie(
+		"jwt-token",
+		newToken,
+		TOKEN_LIFE_TIME,
+		"/",
+		s.host,
+		true,
+		true,
+	)
+
+	c.JSON(http.StatusOK, gin.H{"message": "Успешная авторизация"})
 }

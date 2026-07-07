@@ -20,7 +20,7 @@ func main() {
 		DB_name:  os.Getenv("DB_NAME"),
 	}
 
-	server, err := server.NewServer(postgresCreds, os.Getenv("JWT_SECRET"))
+	server, err := server.NewServer(os.Getenv("HOST"), os.Getenv("JWT_SECRET"), postgresCreds)
 	if err != nil {
 		log.Fatalln(ewrap.Wrap("Couldn't start backend", err))
 	}
