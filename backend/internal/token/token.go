@@ -4,6 +4,7 @@
 package token
 
 import (
+	"errors"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -19,13 +20,13 @@ type customClaims struct {
 	jwt.RegisteredClaims
 }
 
-func NewToken(user_id uint, jwt_secret []byte) (string, error) {
+func NewToken(user_id uint, jwt_secret []byte, lifetime uint) (string, error) {
 	claims := customClaims{
 		ID: user_id,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    TOKEN_ISSUER,
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * TOKEN_LIFE_TIME)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * time.Duration(lifetime))),
 		},
 	}
 
@@ -37,4 +38,21 @@ func NewToken(user_id uint, jwt_secret []byte) (string, error) {
 	}
 
 	return tokenString, nil
+}
+
+func ID(jwt_token string, jwt_secret []byte) (uint, error) {
+	var result customClaims
+	token, err := jwt.ParseWithClaims(jwt_token, &result, func(token *jwt.Token) (any, error) {
+		return jwt_secret, nil
+	})
+
+	if err != nil {
+		return 0, err
+	}
+
+	if !token.Valid {
+		return 0, errors.New("Token is dead")
+	}
+
+	return result.ID, nil
 }
