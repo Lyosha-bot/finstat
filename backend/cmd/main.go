@@ -7,6 +7,7 @@ import (
 	ewrap "finstat/internal/lib"
 	"finstat/internal/repository"
 	"finstat/internal/server"
+	"finstat/internal/service"
 )
 
 func main() {
@@ -20,10 +21,15 @@ func main() {
 		DB_name:  os.Getenv("DB_NAME"),
 	}
 
-	server, err := server.NewServer(os.Getenv("HOST"), os.Getenv("JWT_SECRET"), postgresCreds)
+	repo, err := repository.NewClient(postgresCreds)
 	if err != nil {
-		log.Fatalln(ewrap.Wrap("Couldn't start backend", err))
+		log.Fatalln(ewrap.Wrap("Couldn't create repo client", err))
 	}
+
+	authService := service.NewAuthService(repo, []byte(os.Getenv("JWT_SECRET")))
+	transactionsService := service.NewTransactionService(repo)
+
+	server := server.NewServer(os.Getenv("HOST"), authService, transactionsService)
 
 	log.Println("Backend is running")
 
