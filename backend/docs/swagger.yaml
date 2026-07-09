@@ -1,0 +1,162 @@
+basePath: /api
+definitions:
+  server.AddTransactionFormat:
+    properties:
+      amount:
+        type: number
+      date:
+        type: string
+      description:
+        type: string
+    required:
+    - amount
+    - date
+    type: object
+  server.UserFormat:
+    properties:
+      password:
+        maxLength: 30
+        minLength: 5
+        type: string
+      username:
+        maxLength: 20
+        minLength: 3
+        type: string
+    required:
+    - password
+    - username
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: Веб-приложения для учета личных финансов
+  termsOfService: http://swagger.io/terms/
+  title: Finstat API
+  version: "0.5"
+paths:
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Авторизирует пользователя системы и сохраняет jwt-токена в cookies
+      parameters:
+      - description: Логин и пароль для авторизации
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.UserFormat'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Успешная авторизация
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Неверно заполнены поля
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Ошибка авторизации пользователя
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Авторизация пользователя
+      tags:
+      - auth
+  /transactions:
+    get:
+      description: Возвращает список транзакций выполненных авторизованным пользователем
+      parameters:
+      - in: query
+        name: from
+        type: string
+      - in: query
+        minimum: 1
+        name: limit
+        type: integer
+      - in: query
+        minimum: 1
+        name: page
+        type: integer
+      - in: query
+        name: to
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Успешно
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Неверно заполнена дата начала периода
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Ошибка авторизации
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Ошибка при получении транзакций
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Получение списка транзакций
+      tags:
+      - transactions
+    post:
+      consumes:
+      - application/json
+      description: Создает транзакцию от имени авторизированного пользователя
+      parameters:
+      - description: Информация о транзакции
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/server.AddTransactionFormat'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Успешно
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Неверно заполнены поля
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Ошибка авторизации
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Ошибка при добавления транзакции
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Создание транзакции
+      tags:
+      - transactions
+swagger: "2.0"

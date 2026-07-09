@@ -113,12 +113,15 @@ func (c *Connection) Migrations() (map[uint64]bool, error) {
 	result := make(map[uint64]bool, 5)
 	for rows.Next() {
 		var val uint64
-		err = rows.Scan(&val)
-		if err != nil {
+		if err := rows.Scan(&val); err != nil {
 			return nil, ewrap.Wrap("Couldn't scan value", err)
 		}
 		result[val] = true
 		log.Println("Existing migration: ", val)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, ewrap.Wrap("Couldn't iterate migrations", err)
 	}
 
 	return result, nil
