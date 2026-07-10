@@ -1,8 +1,10 @@
 package server
 
 import (
+	"errors"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	_ "finstat/docs"
@@ -34,9 +36,10 @@ type IServer interface {
 }
 
 type Server struct {
-	host                string
-	authService         *service.AuthService
-	transactionsService *service.TransactionsService
+	host               string
+	authService        *service.AuthService
+	transactionService *service.TransactionService
+	categoriesService  *service.CategoryService
 }
 
 type UserFormat struct {
@@ -46,8 +49,20 @@ type UserFormat struct {
 
 type AddTransactionFormat struct {
 	Amount      decimal.Decimal `json:"amount" binding:"required"`
+	Category    uint            `json:"category" binding:"required,numeric"`
 	Description string          `json:"description" binding:"omitempty"`
 	Date        string          `json:"date" binding:"required"`
+}
+
+type UpdateTransactionFormat struct {
+	Amount      decimal.Decimal `json:"amount" binding:"required"`
+	Category    uint            `json:"category" binding:"required,numeric"`
+	Description string          `json:"description" binding:"omitempty"`
+	Date        string          `json:"date" binding:"required"`
+}
+
+type DeleteTransactionFormat struct {
+	ID uint `json:"id" binding:"required, numeric"`
 }
 
 type TransactionsFilter struct {
@@ -69,11 +84,16 @@ type TransactionsResponse struct {
 	Result []repository.Transaction `json:"result"`
 }
 
-func NewServer(host string, authService *service.AuthService, transactionsService *service.TransactionsService) *Server {
+type CategoriesResponse struct {
+	Result []repository.Category `json:"result"`
+}
+
+func AddServer(host string, authService *service.AuthService, transactionsService *service.TransactionService, categoriesService *service.CategoryService) *Server {
 	return &Server{
-		host:                host,
-		authService:         authService,
-		transactionsService: transactionsService,
+		host:               host,
+		authService:        authService,
+		transactionService: transactionsService,
+		categoriesService:  categoriesService,
 	}
 }
 
@@ -91,6 +111,12 @@ func (s *Server) Start(port string) {
 	transactions.Use(s.middleware)
 	transactions.POST("", s.addTransaction)
 	transactions.GET("", s.transactions)
+	transactions.PATCH("/:id", s.updateTransaction)
+	transactions.DELETE("/:id", s.deleteTransaction)
+
+	categories := api.Group("/categories")
+	categories.Use(s.middleware)
+	categories.GET("", s.categories)
 
 	router.Run(":" + port)
 }
@@ -125,6 +151,7 @@ func (s *Server) middleware(c *gin.Context) {
 // @Param        	input body UserFormat true 	"Логин и пароль для регистрации"
 // @Success      	201  {object}  MessageResponse 	"Успешная регистрация"
 // @Failure      	400  {object}  ErrorResponse 	"Неверно заполнены поля"
+// @Failure      	409  {object}  ErrorResponse 	"Данное имя пользователя уже используется"
 // @Failure      	500  {object}  ErrorResponse 	"Ошибка регистрации пользователя"
 // @Router       	/auth/register [post]
 func (s *Server) register(c *gin.Context) {
@@ -137,6 +164,10 @@ func (s *Server) register(c *gin.Context) {
 
 	if err := s.authService.Register(data.Username, data.Password); err != nil {
 		log.Println(err)
+		if errors.Is(err, repository.ErrUserAlreadyExists) {
+			c.JSON(http.StatusConflict, gin.H{"error": "Данное имя пользователя уже используется"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка регистрации пользователя"})
 		return
 	}
@@ -210,10 +241,88 @@ func (s *Server) addTransaction(c *gin.Context) {
 
 	id := c.GetUint("jwt")
 
-	_, err = s.transactionsService.AddTransaction(id, data.Amount, data.Description, date)
+	_, err = s.transactionService.AddTransaction(id, data.Amount, data.Category, data.Description, date)
 	if err != nil {
 		log.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при добавления транзакции"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Успешно"})
+}
+
+// @Summary 		Обновление информации о транзакции
+// @Description  	Обновляет информацию о транзакции на новую
+// @Tags         	transactions
+// @Accept       	json
+// @Produce      	json
+// @Param			id 		path 		int 					true 	"ID транзакции"
+// @Param        	input 	body 		UpdateTransactionFormat true "Новая информация о транзакции"
+// @Success      	200  	{object}  	MessageResponse "Успешно"
+// @Failure      	400  	{object}  	ErrorResponse 	"Неверно заполнены поля"
+// @Failure      	400  	{object}  	ErrorResponse 	"Неверно указано ID транзакции"
+// @Failure      	401  	{object}  	ErrorResponse 	"Ошибка авторизации"
+// @Failure      	500  	{object}  	ErrorResponse 	"Ошибка при обновлении транзакции"
+// @Router       	/transactions/{id} [patch]
+func (s *Server) updateTransaction(c *gin.Context) {
+	var data UpdateTransactionFormat
+	if err := c.ShouldBindJSON(&data); err != nil {
+		log.Println(err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверно заполнены поля"})
+		return
+	}
+
+	date, err := time.Parse("2006-01-02", data.Date)
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверно заполнена дата"})
+		return
+	}
+
+	userID := c.GetUint("jwt")
+
+	paramID := c.Param("id")
+	transactionID, err := strconv.ParseUint(paramID, 10, 32)
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверно указано ID транзакции"})
+		return
+	}
+
+	if err := s.transactionService.UpdateTransaction(userID, uint(transactionID), data.Amount, data.Category, data.Description, date); err != nil {
+		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при обновлении транзакции"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Успешно"})
+}
+
+// @Summary 		Удаление транзакции
+// @Description  	Удаление транзакции
+// @Tags         	transactions
+// @Accept       	json
+// @Produce      	json
+// @Param			id		path 		int 	true 	"ID транзакции"
+// @Success      	200  	{object}  	MessageResponse "Успешно"
+// @Failure      	400  	{object}  	ErrorResponse 	"Неверно указано ID транзакции"
+// @Failure      	401  	{object}  	ErrorResponse 	"Ошибка авторизации"
+// @Failure      	500  	{object}  	ErrorResponse 	"Ошибка при удалениии транзакции"
+// @Router       	/transactions/{id} [delete]
+func (s *Server) deleteTransaction(c *gin.Context) {
+	id := c.GetUint("jwt")
+
+	paramID := c.Param("id")
+	transactionID, err := strconv.ParseUint(paramID, 10, 32)
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверно указано ID транзакции"})
+		return
+	}
+
+	if err := s.transactionService.DeleteTransaction(id, uint(transactionID)); err != nil {
+		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при удалении транзакции"})
 		return
 	}
 
@@ -265,18 +374,76 @@ func (s *Server) transactions(c *gin.Context) {
 	var result []repository.Transaction
 
 	if data.From == "" && data.To == "" {
-		result, err = s.transactionsService.Transactions(id, data.Limit, data.Page)
+		result, err = s.transactionService.Transactions(id, data.Limit, data.Page)
 	} else if data.To == "" {
-		result, err = s.transactionsService.TransactionsFromDate(id, data.Limit, data.Page, from, true)
+		result, err = s.transactionService.TransactionsFromDate(id, data.Limit, data.Page, from, true)
 	} else if data.From == "" {
-		result, err = s.transactionsService.TransactionsFromDate(id, data.Limit, data.Page, to, false)
+		result, err = s.transactionService.TransactionsFromDate(id, data.Limit, data.Page, to, false)
 	} else {
-		result, err = s.transactionsService.TransactionsInPeriod(id, data.Limit, data.Page, from, to)
+		result, err = s.transactionService.TransactionsInPeriod(id, data.Limit, data.Page, from, to)
 	}
 
 	if err != nil {
 		log.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при получении транзакций"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"result": result})
+}
+
+// @Summary 		Получение списка системных категорий
+// @Description  	Возвращает список системных категорий
+// @Tags         	categories
+// @Produce      	json
+// @Success      	200  {object}  CategoriesResponse 		"Успешное получение системных категорий"
+// @Failure      	401  {object}  ErrorResponse 			"Ошибка авторизации"
+// @Failure      	500  {object}  ErrorResponse 			"Ошибка при получении категории"
+// @Router       	/system-categories [get]
+// @Ignore
+func (s *Server) systemCategories(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"result": s.categoriesService.SystemCategories()})
+}
+
+// @Summary 		Получение списка пользовательских категорий
+// @Description  	Возвращает список пользовательских категорий
+// @Tags         	categories
+// @Produce      	json
+// @Success      	200  {object}  CategoriesResponse 		"Успешное получение пользовательских категорий"
+// @Failure      	401  {object}  ErrorResponse 			"Ошибка авторизации"
+// @Failure      	500  {object}  ErrorResponse 			"Ошибка при получении категории"
+// @Router       	/user-categories [get]
+// @Ignore
+func (s *Server) userCategories(c *gin.Context) {
+	id := c.GetUint("jwt")
+
+	result, err := s.categoriesService.UserCategories(id)
+
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при получении категорий"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"result": result})
+}
+
+// @Summary 		Получение списка категорий
+// @Description  	Возвращает список пользовательских и системных категорий
+// @Tags         	categories
+// @Produce      	json
+// @Success      	200  {object}  CategoriesResponse 		"Успешное получение категорий"
+// @Failure      	401  {object}  ErrorResponse 			"Ошибка авторизации"
+// @Failure      	500  {object}  ErrorResponse 			"Ошибка при получении категории"
+// @Router       	/categories [get]
+func (s *Server) categories(c *gin.Context) {
+	id := c.GetUint("jwt")
+
+	result, err := s.categoriesService.Categories(id)
+
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при получении категорий"})
 		return
 	}
 

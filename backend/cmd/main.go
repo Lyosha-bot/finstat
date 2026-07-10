@@ -21,15 +21,21 @@ func main() {
 		DB_name:  os.Getenv("DB_NAME"),
 	}
 
-	repo, err := repository.NewClient(postgresCreds)
+	repo, err := repository.AddClient(postgresCreds)
 	if err != nil {
 		log.Fatalln(ewrap.Wrap("Couldn't create repo client", err))
 	}
 
 	authService := service.NewAuthService(repo, []byte(os.Getenv("JWT_SECRET")))
+
 	transactionsService := service.NewTransactionService(repo)
 
-	server := server.NewServer(os.Getenv("HOST"), authService, transactionsService)
+	categoryService, err := service.NewCategoryService(repo)
+	if err != nil {
+		log.Fatalln(ewrap.Wrap("Couldn't get system categories", err))
+	}
+
+	server := server.AddServer(os.Getenv("HOST"), authService, transactionsService, categoryService)
 
 	log.Println("Backend is running")
 

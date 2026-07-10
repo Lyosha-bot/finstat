@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	ewrap "finstat/internal/lib"
 	"finstat/internal/repository"
 	"finstat/internal/token"
@@ -35,6 +36,9 @@ func (s *AuthService) Register(username, password string) error {
 
 	_, err = s.repo.InsertUser(username, string(hashedPassword))
 	if err != nil {
+		if errors.Is(err, repository.ErrUserAlreadyExists) {
+			return err
+		}
 		return ewrap.Wrap("Couldn't insert new user", err)
 	}
 
@@ -51,7 +55,7 @@ func (s *AuthService) Login(username, password string) (string, error) {
 		return "", ewrap.Wrap("Passwords mismatched", err)
 	}
 
-	newToken, err := token.NewToken(user.ID, s.jwtSecret, TOKEN_LIFE_TIME)
+	newToken, err := token.AddToken(user.ID, s.jwtSecret, TOKEN_LIFE_TIME)
 	if err != nil {
 		return "", ewrap.Wrap("Couldn't generate new token", err)
 	}

@@ -9,12 +9,31 @@ import (
 )
 
 const (
-	INSERT_TRANSACTION_QUERY = `INSERT INTO transactions (user_id, amount, description, date) VALUES ($1, $2, $3, $4) RETURNING id;`
+	ADD_TRANSACTION_QUERY = `
+		INSERT INTO transactions (user_id, amount, category_id, description, date)
+		SELECT $1, $2, id, $4, $5
+		FROM categories
+		WHERE id = $3 AND (user_id IS NULL OR user_id = $1)
+		RETURNING id;
+	`
+
+	UPDATE_TRANSACTION_QUERY = `
+		UPDATE transactions
+		SET amount = $3, category_id = $4, description = $5, date = $6
+		WHERE id = $2 AND user_id = $1
+		RETURNING TRUE;
+	`
+
+	DELETE_TRANSACTION_QUERY = `
+		DELETE FROM transactions
+		WHERE id = $2 AND user_id = $1
+		RETURNING TRUE;
+	`
 
 	TRANSACTION_BY_ID_QUERY = `SELECT (id, user_id, amount, description, date) FROM transactions WHERE user_id = $1 AND id = $2;`
 
 	TRANSACTIONS_QUERY = `
-		SELECT (id, user_id, amount, description, date) 
+		SELECT (id, user_id, amount, category_id, description, date) 
 		FROM transactions 
 		WHERE user_id = $1
 		ORDER BY date DESC
@@ -22,7 +41,7 @@ const (
 		OFFSET $3;
 	`
 	TRANSACTIONS_IN_PERIOD_QUERY = `
-		SELECT (id, user_id, amount, description, date) 
+		SELECT (id, user_id, amount, category_id, description, date) 
 		FROM transactions 
 		WHERE user_id = $1 AND date >= $2 AND date <= $3
 		ORDER BY date DESC
@@ -30,7 +49,7 @@ const (
 		OFFSET $5;
 	`
 	TRANSACTIONS_BEFORE_DATE_QUERY = `
-		SELECT (id, user_id, amount, description, date) 
+		SELECT (id, user_id, amount, category_id, description, date) 
 		FROM transactions 
 		WHERE user_id = $1 AND date <= $2
 		ORDER BY date DESC
@@ -52,11 +71,12 @@ type Transaction struct {
 	ID          uint            `json:"id"`
 	UserID      uint            `json:"userID"`
 	Amount      decimal.Decimal `json:"amount"`
+	CategoryID  uint            `json:"category_id"`
 	Description string          `json:"description"`
 	Date        time.Time       `json:"date"`
 }
 
-func (c *Client) AddTransaction(userID uint, amount decimal.Decimal, description string, date time.Time) (uint, error) {
+func (c *Client) AddTransaction(userID uint, amount decimal.Decimal, categoryID uint, description string, date time.Time) (uint, error) {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -65,7 +85,7 @@ func (c *Client) AddTransaction(userID uint, amount decimal.Decimal, description
 	}
 	defer conn.Release()
 
-	row := conn.QueryRow(ctx, INSERT_TRANSACTION_QUERY, userID, amount, description, date)
+	row := conn.QueryRow(ctx, ADD_TRANSACTION_QUERY, userID, amount, categoryID, description, date)
 
 	var id uint
 	err = row.Scan(&id)
@@ -74,6 +94,44 @@ func (c *Client) AddTransaction(userID uint, amount decimal.Decimal, description
 	}
 
 	return id, nil
+}
+
+func (c *Client) UpdateTransaction(userID uint, transactionID uint, newAmount decimal.Decimal, newCategoryID uint, newDescription string, newDate time.Time) error {
+	ctx := context.Background()
+
+	conn, err := c.pool.Acquire(ctx)
+	if err != nil {
+		return ewrap.Wrap("Couldn't acquire connection", err)
+	}
+	defer conn.Release()
+
+	row := conn.QueryRow(ctx, UPDATE_TRANSACTION_QUERY, userID, transactionID, newAmount, newCategoryID, newDescription, newDate)
+
+	var success bool
+	if err := row.Scan(&success); err != nil {
+		return ewrap.Wrap("Couldn't get updated transaction id", err)
+	}
+
+	return nil
+}
+
+func (c *Client) DeleteTransaction(userID uint, transactionID uint) error {
+	ctx := context.Background()
+
+	conn, err := c.pool.Acquire(ctx)
+	if err != nil {
+		return ewrap.Wrap("Couldn't acquire connection", err)
+	}
+	defer conn.Release()
+
+	row := conn.QueryRow(ctx, DELETE_TRANSACTION_QUERY, userID, transactionID)
+
+	var success bool
+	if err := row.Scan(&success); err != nil {
+		return ewrap.Wrap("Couldn't delete transaction id", err)
+	}
+
+	return nil
 }
 
 func (c *Client) TransactionByID(userID, transactionID uint) (*Transaction, error) {
@@ -88,8 +146,7 @@ func (c *Client) TransactionByID(userID, transactionID uint) (*Transaction, erro
 	row := conn.QueryRow(ctx, TRANSACTION_BY_ID_QUERY, transactionID)
 
 	var transaction Transaction
-	err = row.Scan(&transaction)
-	if err != nil {
+	if err = row.Scan(&transaction); err != nil {
 		return nil, ewrap.Wrap("Couldn't get transaction by ID", err)
 	}
 
