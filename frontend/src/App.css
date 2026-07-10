@@ -39,6 +39,8 @@ body {
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
   border: 1px solid rgba(74, 222, 128, 0.15);
   transition: all 0.3s ease;
+  position: relative;
+  z-index: 100;
 }
 
 .header:hover {
@@ -52,6 +54,7 @@ body {
   align-items: center;
   flex-wrap: wrap;
   gap: 1rem;
+  position: relative;
 }
 
 .header h1 {
@@ -73,7 +76,15 @@ body {
 
 .header-actions {
   display: flex;
-  gap: 0.8rem;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  gap: 1rem;
+}
+
+.nav-buttons {
+  display: flex;
+  gap: 0.6rem;
   flex-wrap: wrap;
 }
 
@@ -235,7 +246,16 @@ body {
   letter-spacing: 0.05em;
 }
 
-.filter-group select,
+.filter-group select {
+  padding: 0.5rem 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  font-size: 1rem;
+  color: #e0e0e0;
+  transition: all 0.3s ease;
+  /* background – из глобального правила */
+}
+
 .filter-group input {
   padding: 0.5rem 0.7rem;
   background: rgba(255, 255, 255, 0.04);
@@ -501,7 +521,6 @@ body {
 .group-total .income {
   color: #4ade80;
 }
-
 .group-total .expense {
   color: #f87171;
 }
@@ -774,8 +793,8 @@ body {
 .form-group select {
   width: 100%;
   padding: 0.5rem 0.7rem;
-  background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
+  background-color: rgba(255, 255, 255, 0.04);
   border-radius: 6px;
   font-size: 0.95rem;
   color: #e0e0e0;
@@ -787,6 +806,7 @@ body {
   outline: none;
   border-color: #4ade80;
   box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.1);
+  background-color: rgba(255, 255, 255, 0.04);
 }
 
 .modal-actions {
@@ -877,4 +897,175 @@ body {
     min-width: 50px;
     font-size: 0.65rem;
   }
+}
+
+/* ===== LOGIN ===== */
+.login-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 1rem;
+}
+
+.login-card {
+  background: rgba(20, 20, 30, 0.8);
+  backdrop-filter: blur(12px);
+  border-radius: 16px;
+  padding: 2.5rem;
+  max-width: 400px;
+  width: 100%;
+  border: 1px solid rgba(74, 222, 128, 0.15);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+}
+
+.login-card h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #4ade80, #22c55e);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+
+.login-card p {
+  text-align: center;
+  color: #8888aa;
+  margin-bottom: 1.5rem;
+}
+
+.login-card .form-group {
+  margin-bottom: 1.2rem;
+}
+
+.login-card .form-group label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #8888aa;
+  margin-bottom: 0.2rem;
+}
+
+.login-card .form-group input {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  font-size: 1rem;
+  color: #e0e0e0;
+  transition: border-color 0.3s;
+}
+
+.login-card .form-group input:focus {
+  outline: none;
+  border-color: #4ade80;
+  box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.1);
+}
+
+.login-error {
+  color: #f87171;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+  text-align: center;
+}
+
+.login-toggle {
+  margin-top: 0.5rem;
+}
+
+/* ===== PROFILE ===== */
+.profile-wrapper {
+  position: relative;
+  flex-shrink: 0;
+  z-index: 1000;
+}
+
+.profile-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 0.4rem 0.8rem;
+  color: #e0e0e0;
+  cursor: pointer;
+  transition: background 0.3s;
+  font-size: 0.9rem;
+}
+
+.profile-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.profile-icon {
+  font-size: 1.2rem;
+}
+
+.profile-name {
+  font-size: 0.9rem;
+}
+
+.profile-dropdown {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  background: rgba(20, 20, 30, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 0.5rem;
+  min-width: 120px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+  z-index: 2000;
+}
+
+.profile-dropdown .btn {
+  width: 100%;
+  text-align: left;
+}
+
+/* ===== ГЛОБАЛЬНЫЙ СТИЛЬ ДЛЯ SELECT (со стабильной стрелкой) ===== */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-color: rgba(255, 255, 255, 0.04);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  background-size: 12px 8px;
+  background-origin: content-box;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 0.5rem 2.5rem 0.5rem 0.7rem;
+  font-size: 1rem;
+  color: #e0e0e0;
+  transition: border-color 0.3s, background-color 0.3s;
+  cursor: pointer;
+}
+
+select option {
+  background: #1a1a2e;
+  color: #e0e0e0;
+  padding: 0.3rem 0.5rem;
+}
+
+select option:hover,
+select option:focus,
+select option:active,
+select option:checked {
+  background: rgba(74, 222, 128, 0.2);
+  color: #008531;
+}
+
+select:focus {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 7l5-5 5 5' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  outline: none;
+  border-color: #4ade80;
+  box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.1);
+  background-position: right 1rem center !important; /* фиксируем позицию */
 }
