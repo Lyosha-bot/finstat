@@ -1,7 +1,8 @@
 import { useState } from 'react'
+import { login, register } from '../api/auth'
 
 interface LoginProps {
-  onLogin: (username: string) => void  // передаём имя пользователя
+  onLogin: (username: string) => void
 }
 
 export const Login = ({ onLogin }: LoginProps) => {
@@ -10,46 +11,51 @@ export const Login = ({ onLogin }: LoginProps) => {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setLoading(true)
 
     if (!username.trim() || !password.trim()) {
       setError('Заполните все поля')
+      setLoading(false)
       return
     }
 
-    if (isRegister) {
-      // Регистрация
-      if (password !== confirmPassword) {
-        setError('Пароли не совпадают')
-        return
+    try {
+      if (isRegister) {
+        // Регистрация
+        if (password !== confirmPassword) {
+          setError('Пароли не совпадают')
+          setLoading(false)
+          return
+        }
+        await register(username, password)
+        // После успешной регистрации — авторизуемся автоматически
+        await login(username, password)
+      } else {
+        // Вход
+        await login(username, password)
       }
-      // localStorage
-      const users = JSON.parse(localStorage.getItem('users') || '[]')
-      if (users.some((u: any) => u.username === username)) {
-        setError('Пользователь уже существует')
-        return
-      }
-      users.push({ username, password })
-      localStorage.setItem('users', JSON.stringify(users))
-      // После регистрации сразу логин
+
+      // Успешный вход
       localStorage.setItem('auth', 'true')
       localStorage.setItem('username', username)
       onLogin(username)
-    } else {
-      // Вход
-      const users = JSON.parse(localStorage.getItem('users') || '[]')
-      const user = users.find((u: any) => u.username === username && u.password === password)
-      if (!user) {
-        setError('Неверный логин или пароль')
-        return
-      }
-      localStorage.setItem('auth', 'true')
-      localStorage.setItem('username', username)
-      onLogin(username)
+    } catch (err: any) {
+      setError(err.message || 'Неизвестная ошибка')
+    } finally {
+      setLoading(false)
     }
+  }
+
+  const toggleMode = () => {
+    setIsRegister(!isRegister)
+    setError('')
+    setPassword('')
+    setConfirmPassword('')
   }
 
   return (
@@ -91,18 +97,15 @@ export const Login = ({ onLogin }: LoginProps) => {
             </div>
           )}
           {error && <div className="login-error">{error}</div>}
-          <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
-            {isRegister ? 'Зарегистрироваться' : 'Войти'}
+          <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={loading}>
+            {loading ? 'Загрузка...' : isRegister ? 'Зарегистрироваться' : 'Войти'}
           </button>
         </form>
         <div className="login-toggle">
-          <button 
-            type="button" 
-            className="btn btn-secondary" 
-            onClick={() => {
-              setIsRegister(!isRegister)
-              setError('')
-            }}
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={toggleMode}
             style={{ width: '100%', marginTop: '0.5rem' }}
           >
             {isRegister ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Зарегистрироваться'}

@@ -34,6 +34,7 @@ function App() {
     localStorage.removeItem('auth')
     localStorage.removeItem('username')
     setIsAuthenticated(false)
+    // Можно также вызвать logout API, если есть
   }
 
   // ===== Данные =====
