@@ -1,3 +1,5 @@
+import { type Category } from '../api/categories'
+
 interface FiltersProps {
   periodFilter: 'all' | 'today' | 'week' | 'month'
   setPeriodFilter: (val: any) => void
@@ -7,7 +9,7 @@ interface FiltersProps {
   setFilterCategory: (val: string) => void
   searchQuery: string
   setSearchQuery: (val: string) => void
-  categories: string[]
+  categories: Category[]
 }
 
 export const Filters = ({
@@ -44,8 +46,8 @@ export const Filters = ({
         <label>Категория</label>
         <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
           <option value="all">Все</option>
-          {categories.filter(c => c !== 'Все').map(cat => (
-            <option key={cat} value={cat}>{cat}</option>
+          {categories.map(cat => (
+            <option key={cat.id} value={cat.name}>{cat.name}</option>
           ))}
         </select>
       </div>

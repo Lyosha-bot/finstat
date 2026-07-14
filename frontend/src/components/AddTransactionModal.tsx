@@ -1,3 +1,5 @@
+import { type Category } from '../api/categories'
+
 interface AddTransactionModalProps {
   isOpen: boolean
   onClose: () => void
@@ -11,9 +13,18 @@ interface AddTransactionModalProps {
   setFormData: (data: any) => void
   onSubmit: (e: React.FormEvent) => void
   isEditing: boolean
+  categories: Category[]   // добавили
 }
 
-export const AddTransactionModal = ({ isOpen, onClose, formData, setFormData, onSubmit, isEditing }: AddTransactionModalProps) => {
+export const AddTransactionModal = ({ 
+  isOpen, 
+  onClose, 
+  formData, 
+  setFormData, 
+  onSubmit, 
+  isEditing,
+  categories 
+}: AddTransactionModalProps) => {
   if (!isOpen) return null
 
   return (
@@ -39,14 +50,9 @@ export const AddTransactionModal = ({ isOpen, onClose, formData, setFormData, on
           <div className="form-group">
             <label>Категория</label>
             <select value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})}>
-              <option value="Продукты">Продукты</option>
-              <option value="Транспорт">Транспорт</option>
-              <option value="Жильё">Жильё</option>
-              <option value="Развлечения">Развлечения</option>
-              <option value="Здоровье">Здоровье</option>
-              <option value="Образование">Образование</option>
-              <option value="Зарплата">Зарплата</option>
-              <option value="Прочее">Прочее</option>
+              {categories.map(cat => (
+                <option key={cat.id} value={cat.name}>{cat.name}</option>
+              ))}
             </select>
           </div>
           <div className="form-group">

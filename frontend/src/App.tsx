@@ -1,9 +1,10 @@
 /// <reference types="vite/client" />
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import './App.css'
 
 import type { Transaction } from './types'
 import { useTransactions, useBudgets } from './hooks'
+import { useCategories } from './hooks/useCategories'
 import {
   Login,
   Header,
@@ -34,7 +35,6 @@ function App() {
     localStorage.removeItem('auth')
     localStorage.removeItem('username')
     setIsAuthenticated(false)
-    // Можно также вызвать logout API, если есть
   }
 
   // ===== Данные =====
@@ -60,6 +60,9 @@ function App() {
     },
   ])
 
+  // ===== Категории =====
+  const { categories, loading: categoriesLoading } = useCategories()
+
   // ===== UI состояния =====
   const [activeTab, setActiveTab] = useState<'transactions' | 'stats'>('transactions')
   const [showAddModal, setShowAddModal] = useState(false)
@@ -67,13 +70,25 @@ function App() {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
 
   // ===== Формы =====
+  const getDefaultCategory = () => {
+    if (categories.length > 0) return categories[0].name
+    return ''
+  }
+
   const [formData, setFormData] = useState({
     description: '',
     amount: '',
-    category: 'Продукты',
+    category: getDefaultCategory(),
     type: 'expense' as 'income' | 'expense',
     date: new Date().toISOString().split('T')[0],
   })
+
+  // Обновляем категорию в форме, если она изменилась (при загрузке)
+  useEffect(() => {
+    if (categories.length > 0 && !formData.category) {
+      setFormData(prev => ({ ...prev, category: categories[0].name }))
+    }
+  }, [categories])
 
   const [budgetForm, setBudgetForm] = useState({
     category: '',
@@ -96,8 +111,6 @@ function App() {
   const [statsDateTo, setStatsDateTo] = useState('')
 
   // ===== Вычисляемые данные =====
-  const categories = ['Все', ...new Set(transactions.map(t => t.category))]
-
   const getFilteredTransactions = () => {
     let filtered = [...transactions]
     if (filterType !== 'all') filtered = filtered.filter(t => t.type === filterType)
@@ -250,6 +263,10 @@ function App() {
       alert('Заполните поля корректно')
       return
     }
+    if (!formData.category) {
+      alert('Выберите категорию')
+      return
+    }
     const newTransaction: Transaction = {
       id: Date.now(),
       date: formData.date,
@@ -262,7 +279,7 @@ function App() {
     setFormData({
       description: '',
       amount: '',
-      category: 'Продукты',
+      category: categories.length > 0 ? categories[0].name : '',
       type: 'expense',
       date: new Date().toISOString().split('T')[0],
     })
@@ -288,6 +305,10 @@ function App() {
       alert('Заполните поля корректно')
       return
     }
+    if (!formData.category) {
+      alert('Выберите категорию')
+      return
+    }
     if (!editingTransaction) return
     const updated: Transaction = {
       ...editingTransaction,
@@ -302,7 +323,7 @@ function App() {
     setFormData({
       description: '',
       amount: '',
-      category: 'Продукты',
+      category: categories.length > 0 ? categories[0].name : '',
       type: 'expense',
       date: new Date().toISOString().split('T')[0],
     })
@@ -377,7 +398,7 @@ function App() {
           setFormData({
             description: '',
             amount: '',
-            category: 'Продукты',
+            category: categories.length > 0 ? categories[0].name : '',
             type: 'expense',
             date: new Date().toISOString().split('T')[0],
           })
@@ -450,6 +471,7 @@ function App() {
         setFormData={setFormData}
         onSubmit={editingTransaction ? handleUpdateTransaction : handleAddTransaction}
         isEditing={!!editingTransaction}
+        categories={categories}
       />
 
       <BudgetModal

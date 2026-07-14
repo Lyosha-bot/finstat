@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { login, register } from '../api/auth'
+import { login, register, checkRegisterValidity } from '../api/auth'
 
 interface LoginProps {
   onLogin: (username: string) => void
@@ -26,21 +26,21 @@ export const Login = ({ onLogin }: LoginProps) => {
 
     try {
       if (isRegister) {
-        // Регистрация
         if (password !== confirmPassword) {
           setError('Пароли не совпадают')
           setLoading(false)
           return
         }
+        // Проверяем возможность регистрации
+        await checkRegisterValidity(username, password)
+        // Регистрируем
         await register(username, password)
-        // После успешной регистрации — авторизуемся автоматически
+        // Автоматический вход
         await login(username, password)
       } else {
-        // Вход
         await login(username, password)
       }
 
-      // Успешный вход
       localStorage.setItem('auth', 'true')
       localStorage.setItem('username', username)
       onLogin(username)
