@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	_ "finstat/docs"
@@ -36,6 +37,29 @@ var (
 // @host localhost:8080
 // @BasePath /api
 
+type CategoriesList []uint
+
+func (c *CategoriesList) UnmarshalText(text []byte) error {
+	if len(text) == 0 {
+		return nil
+	}
+
+	elements := strings.Split(string(text), ",")
+	for _, item := range elements {
+		cleaned := strings.TrimSpace(item)
+		if cleaned == "" {
+			continue
+		}
+
+		num, err := strconv.ParseUint(cleaned, 10, 64)
+		if err != nil {
+			return err
+		}
+		*c = append(*c, uint(num))
+	}
+	return nil
+}
+
 type IServer interface {
 	Start(port string)
 }
@@ -49,8 +73,13 @@ type Server struct {
 }
 
 type UserFormat struct {
-	Username string `json:"username" binding:"required,alphanum"`
+	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
+}
+
+type IsUserValidFormat struct {
+	Username string `json:"username" binding:"omitempty"`
+	Password string `json:"password" binding:"omitempty"`
 }
 
 type AddTransactionFormat struct {
@@ -72,10 +101,12 @@ type DeleteTransactionFormat struct {
 }
 
 type TransactionsFilter struct {
-	Limit uint   `form:"limit" binding:"numeric,min=1"`
-	Page  uint   `form:"page" binding:"numeric,min=1"`
-	From  string `form:"from" binding:"omitempty,datetime=2006-01-02"`
-	To    string `form:"to" binding:"omitempty,datetime=2006-01-02"`
+	Limit      uint           `form:"limit" binding:"required,numeric,min=1"`
+	Page       uint           `form:"page" binding:"required,numeric,min=1"`
+	From       string         `form:"from" binding:"omitempty,datetime=2006-01-02"`
+	To         string         `form:"to" binding:"omitempty,datetime=2006-01-02"`
+	Type       int            `form:"type" binding:"omitempty,numeric,min=-1,max=1"`
+	Categories CategoriesList `form:"categories,parser=encoding.TextUnmarshaler" binding:"omitempty"`
 }
 
 type AddBudgetFormat struct {
@@ -170,6 +201,14 @@ func (s *Server) middleware(c *gin.Context) {
 }
 
 func (s *Server) isValidUser(data UserFormat) (bool, string) {
+	if data.Username == "" {
+		return false, "Имя пользователя не может быть пустым"
+	}
+
+	if data.Password == "" {
+		return false, "Пароль не может быть пустым"
+	}
+
 	if !latinRegexp.MatchString(data.Username) || !latinRegexp.MatchString(data.Password) {
 		return false, "Имя пользователя и пароль должны состоять только из латинских букв, цифр и особых символов"
 	}
@@ -235,7 +274,7 @@ func (s *Server) register(c *gin.Context) {
 // @Tags         	auth
 // @Accept       	json
 // @Produce      	json
-// @Param        	input body UserFormat true 	"Логин и пароль для регистрации"
+// @Param        	input body IsUserValidFormat true 	"Логин и пароль для регистрации"
 // @Success      	200  {object}  MessageResponse 	"Регистрация возможна"
 // @Failure      	400  {object}  ErrorResponse 	"Неверно заполнены поля"
 // @Failure      	400  {object}  ErrorResponse 	"Имя пользователя и пароль должны состоять только из латинских букв, цифр и особых символов"
@@ -247,14 +286,19 @@ func (s *Server) register(c *gin.Context) {
 // @Failure      	500  {object}  ErrorResponse 	"Ошибка при проверке данных"
 // @Router       	/auth/register/is-valid [post]
 func (s *Server) isValid(c *gin.Context) {
-	var data UserFormat
+	var data IsUserValidFormat
 	if err := c.ShouldBindJSON(&data); err != nil {
 		log.Println(err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверно заполнены поля"})
 		return
 	}
 
-	isValid, errString := s.isValidUser(data)
+	user := UserFormat{
+		Username: data.Username,
+		Password: data.Password,
+	}
+
+	isValid, errString := s.isValidUser(user)
 
 	if !isValid {
 		c.JSON(http.StatusBadRequest, gin.H{"error": errString})
@@ -372,7 +416,7 @@ func (s *Server) updateTransaction(c *gin.Context) {
 	userID := c.GetUint("jwt")
 
 	paramID := c.Param("id")
-	transactionID, err := strconv.ParseUint(paramID, 10, 32)
+	transactionID, err := strconv.ParseUint(paramID, 10, 64)
 	if err != nil {
 		log.Println(err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверно указано ID транзакции"})
@@ -410,7 +454,7 @@ func (s *Server) deleteTransaction(c *gin.Context) {
 	id := c.GetUint("jwt")
 
 	paramID := c.Param("id")
-	transactionID, err := strconv.ParseUint(paramID, 10, 32)
+	transactionID, err := strconv.ParseUint(paramID, 10, 64)
 	if err != nil {
 		log.Println(err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверно указано ID транзакции"})
@@ -436,7 +480,7 @@ func (s *Server) deleteTransaction(c *gin.Context) {
 // @Description  	Возвращает список транзакций выполненных авторизованным пользователем
 // @Tags         	transactions
 // @Produce      	json
-// @Param        	query query TransactionsFilter true "Параметры полученных транзакций"
+// @Param        	query query TransactionsFilter true "Параметры транзакций"
 // @Success      	200  {object}  TransactionsResponse 	"Успешное получение транзакций"
 // @Failure      	400  {object}  ErrorResponse 			"Неверно заполнены поля"
 // @Failure      	400  {object}  ErrorResponse 			"Неверно заполнена дата начала периода"
@@ -452,39 +496,31 @@ func (s *Server) transactions(c *gin.Context) {
 		return
 	}
 
-	var from time.Time
+	var from *time.Time
 	if data.From != "" {
-		from, err = time.Parse("2006-01-02", data.From)
+		parsedFrom, err := time.Parse("2006-01-02", data.From)
 		if err != nil {
 			log.Println(err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Неверно заполнена дата начала периода"})
 			return
 		}
+		from = &parsedFrom
 	}
 
-	var to time.Time
+	var to *time.Time
 	if data.To != "" {
-		to, err = time.Parse("2006-01-02", data.To)
+		parsedTo, err := time.Parse("2006-01-02", data.To)
 		if err != nil {
 			log.Println(err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Неверно заполнена дата конца периода"})
 			return
 		}
+		to = &parsedTo
 	}
 
 	id := c.GetUint("jwt")
 
-	var result []service.Transaction
-
-	if data.From == "" && data.To == "" {
-		result, err = s.transactionService.Transactions(id, data.Limit, data.Page)
-	} else if data.To == "" {
-		result, err = s.transactionService.TransactionsFromDate(id, data.Limit, data.Page, from, true)
-	} else if data.From == "" {
-		result, err = s.transactionService.TransactionsFromDate(id, data.Limit, data.Page, to, false)
-	} else {
-		result, err = s.transactionService.TransactionsInPeriod(id, data.Limit, data.Page, from, to)
-	}
+	result, err := s.transactionService.Transactions(id, data.Limit, data.Page, from, to, data.Type, data.Categories)
 
 	if err != nil {
 		log.Println(err)

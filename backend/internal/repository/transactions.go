@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	ewrap "finstat/internal/lib"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -45,22 +47,7 @@ const (
 		WHERE user_id = $1 AND id = $2;
 	`
 
-	TRANSACTIONS_QUERY = `
-		SELECT (
-			id,
-			user_id,
-			value,
-			category_id,
-			description,
-			date 
-		)
-		FROM transactions 
-		WHERE user_id = $1
-		ORDER BY date DESC
-		LIMIT $2
-		OFFSET $3;
-	`
-	TRANSACTIONS_IN_PERIOD_QUERY = `
+	TRANSACTIONS_QUERY_BASE = `
 		SELECT (
 			id,
 			user_id,
@@ -69,44 +56,9 @@ const (
 			description,
 			date
 		)
-		FROM transactions 
-		WHERE 
-			user_id = $1 
-			AND date >= $2 
-			AND date <= $3
-		ORDER BY date DESC
-		LIMIT $4
-		OFFSET $5;
-	`
-	TRANSACTIONS_BEFORE_DATE_QUERY = `
-		SELECT (
-			id,
-			user_id,
-			value,
-			category_id,
-			description,
-			date
-		)
-		FROM transactions 
-		WHERE user_id = $1 AND date <= $2
-		ORDER BY date DESC
-		LIMIT $3
-		OFFSET $4;
-	`
-
-	TRANSACTIONS_AFTER_DATE_QUERY = `
-		SELECT (
-			id,
-			user_id,
-			value,
-			description,
-			date
-		)
-		FROM transactions 
-		WHERE user_id = $1 AND date >= $2
-		ORDER BY date DESC
-		LIMIT $3
-		OFFSET $4;
+		FROM transactions
+		WHERE
+			user_id = $1
 	`
 )
 
@@ -194,7 +146,7 @@ func (c *Client) TransactionByID(userID, transactionID uint) (*Transaction, erro
 	return &transaction, nil
 }
 
-func (c *Client) Transactions(userID, limit, page uint) ([]Transaction, error) {
+func (c *Client) Transactions(userID, limit, page uint, from, to *time.Time, transactionType int, categories []uint) ([]Transaction, error) {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -203,11 +155,55 @@ func (c *Client) Transactions(userID, limit, page uint) ([]Transaction, error) {
 	}
 	defer conn.Release()
 
+	args := make([]any, 0, 7)
+	args = append(args, userID)
+
+	applyArg := func(arg any) string {
+		args = append(args, arg)
+		return fmt.Sprintf("$%d", len(args))
+	}
+
+	var builder strings.Builder
+
+	builder.Grow(100)
+
+	builder.WriteString(TRANSACTIONS_QUERY_BASE)
+
+	if from != nil {
+		builder.WriteString("\n\t\tAND date >= ")
+		builder.WriteString(applyArg(*from))
+	}
+
+	if to != nil {
+		builder.WriteString("\n\t\tAND date <= ")
+		builder.WriteString(applyArg(*to))
+	}
+
+	if transactionType < 0 {
+		builder.WriteString("\n\t\tAND value < 0")
+	} else if transactionType > 0 {
+		builder.WriteString("\n\t\tAND value > 0")
+	}
+
+	if categories != nil {
+		builder.WriteString("\n\t\tAND category_id = ANY(")
+		builder.WriteString(applyArg(categories))
+		builder.WriteString(")")
+	}
+
+	builder.WriteString("\nLIMIT ")
+	builder.WriteString(applyArg(limit))
+
 	offset := (page - 1) * limit
 
-	rows, err := conn.Query(ctx, TRANSACTIONS_QUERY, userID, limit, offset)
+	builder.WriteString("\nOFFSET ")
+	builder.WriteString(applyArg(offset))
+
+	builder.WriteString(";")
+
+	rows, err := conn.Query(ctx, builder.String(), args...)
 	if err != nil {
-		return nil, ewrap.Wrap("Couldn't get latest transactions", err)
+		return nil, ewrap.Wrap("Couldn't get transactions", err)
 	}
 
 	result := make([]Transaction, 0, limit)
@@ -221,80 +217,7 @@ func (c *Client) Transactions(userID, limit, page uint) ([]Transaction, error) {
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, ewrap.Wrap("Couldn't iterate latest transactions", err)
-	}
-
-	return result, nil
-}
-
-func (c *Client) TransactionsInPeriod(userID uint, limit, page uint, from, to time.Time) ([]Transaction, error) {
-	ctx := context.Background()
-
-	conn, err := c.pool.Acquire(ctx)
-	if err != nil {
-		return nil, ewrap.Wrap("Couldn't acquire connection", err)
-	}
-	defer conn.Release()
-
-	offset := (page - 1) * limit
-
-	rows, err := conn.Query(ctx, TRANSACTIONS_IN_PERIOD_QUERY, userID, from, to, limit, offset)
-	if err != nil {
-		return nil, ewrap.Wrap("Couldn't get transactions in period", err)
-	}
-
-	result := make([]Transaction, 0, 10)
-	for rows.Next() {
-		var val Transaction
-		if err = rows.Scan(&val); err != nil {
-			return nil, ewrap.Wrap("Couldn't scan transaction", err)
-		}
-
-		result = append(result, val)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, ewrap.Wrap("Couldn't iterate transactions in period", err)
-	}
-
-	return result, nil
-}
-
-func (c *Client) TransactionsFromDate(userID uint, limit, page uint, date time.Time, order bool) ([]Transaction, error) {
-	ctx := context.Background()
-
-	conn, err := c.pool.Acquire(ctx)
-	if err != nil {
-		return nil, ewrap.Wrap("Couldn't acquire connection", err)
-	}
-	defer conn.Release()
-
-	offset := (page - 1) * limit
-
-	var query string
-	if order {
-		query = TRANSACTIONS_BEFORE_DATE_QUERY
-	} else {
-		query = TRANSACTIONS_AFTER_DATE_QUERY
-	}
-
-	rows, err := conn.Query(ctx, query, userID, date, limit, offset)
-	if err != nil {
-		return nil, ewrap.Wrap("Couldn't get transactions before date", err)
-	}
-
-	result := make([]Transaction, 0, limit)
-	for rows.Next() {
-		var val Transaction
-		if err = rows.Scan(&val); err != nil {
-			return nil, ewrap.Wrap("Couldn't scan transaction", err)
-		}
-
-		result = append(result, val)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, ewrap.Wrap("Couldn't iterate transactions from date", err)
+		return nil, ewrap.Wrap("Couldn't iterate transactions", err)
 	}
 
 	return result, nil
