@@ -19,7 +19,7 @@ type customClaims struct {
 	jwt.RegisteredClaims
 }
 
-func NewToken(user_id uint, jwt_secret []byte, lifetime uint) (string, error) {
+func AddToken(user_id uint, jwt_secret []byte, lifetime uint) (string, error) {
 	claims := customClaims{
 		ID: user_id,
 		RegisteredClaims: jwt.RegisteredClaims{

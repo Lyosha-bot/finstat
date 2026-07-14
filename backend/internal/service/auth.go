@@ -11,7 +11,7 @@ import (
 const TOKEN_LIFE_TIME = 15
 
 type AuthRepo interface {
-	InsertUser(username, password string) (uint, error)
+	InsertUser(username, password string) error
 	User(username string) (*repository.User, error)
 }
 
@@ -33,8 +33,7 @@ func (s *AuthService) Register(username, password string) error {
 		return ewrap.Wrap("Couldn't generate hashed password", err)
 	}
 
-	_, err = s.repo.InsertUser(username, string(hashedPassword))
-	if err != nil {
+	if err := s.repo.InsertUser(username, string(hashedPassword)); err != nil {
 		return ewrap.Wrap("Couldn't insert new user", err)
 	}
 
@@ -51,7 +50,7 @@ func (s *AuthService) Login(username, password string) (string, error) {
 		return "", ewrap.Wrap("Passwords mismatched", err)
 	}
 
-	newToken, err := token.NewToken(user.ID, s.jwtSecret, TOKEN_LIFE_TIME)
+	newToken, err := token.AddToken(user.ID, s.jwtSecret, TOKEN_LIFE_TIME)
 	if err != nil {
 		return "", ewrap.Wrap("Couldn't generate new token", err)
 	}
