@@ -4,12 +4,13 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"regexp"
 	"strconv"
 	"time"
 
 	_ "finstat/docs"
 
-	"finstat/internal/repository"
+	"finstat/internal/apperr"
 	"finstat/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -23,8 +24,12 @@ const (
 	JWT_COOKIE_NAME = "jwt"
 )
 
+var (
+	latinRegexp = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
+)
+
 // @title Finstat API
-// @version 0.5
+// @version 0.7
 // @description Веб-приложения для учета личных финансов
 // @termsOfService http://swagger.io/terms/
 
@@ -39,12 +44,13 @@ type Server struct {
 	host               string
 	authService        *service.AuthService
 	transactionService *service.TransactionService
-	categoriesService  *service.CategoryService
+	categoryService    *service.CategoryService
+	budgetService      *service.BudgetService
 }
 
 type UserFormat struct {
-	Username string `json:"username" binding:"required,alphanum,min=3,max=20"`
-	Password string `json:"password" binding:"required,min=5,max=30"`
+	Username string `json:"username" binding:"required,alphanum"`
+	Password string `json:"password" binding:"required"`
 }
 
 type AddTransactionFormat struct {
@@ -56,7 +62,7 @@ type AddTransactionFormat struct {
 
 type UpdateTransactionFormat struct {
 	Amount      decimal.Decimal `json:"amount" binding:"required"`
-	Category    uint            `json:"category" binding:"required,numeric"`
+	CategoryID  uint            `json:"category" binding:"required,numeric"`
 	Description string          `json:"description" binding:"omitempty"`
 	Date        string          `json:"date" binding:"required"`
 }
@@ -72,6 +78,15 @@ type TransactionsFilter struct {
 	To    string `form:"to" binding:"omitempty,datetime=2006-01-02"`
 }
 
+type AddBudgetFormat struct {
+	CategoryID uint            `json:"category_id" binding:"required"`
+	Limit      decimal.Decimal `json:"limit" binding:"omitempty"`
+}
+
+type BudgetsFilter struct {
+	Date string `form:"date" binding:"required,datetime=2006-01-02"`
+}
+
 type MessageResponse struct {
 	Message string `json:"message"`
 }
@@ -81,19 +96,24 @@ type ErrorResponse struct {
 }
 
 type TransactionsResponse struct {
-	Result []repository.Transaction `json:"result"`
+	Result []service.Transaction `json:"result"`
 }
 
 type CategoriesResponse struct {
-	Result []repository.Category `json:"result"`
+	Result []service.Category `json:"result"`
 }
 
-func AddServer(host string, authService *service.AuthService, transactionsService *service.TransactionService, categoriesService *service.CategoryService) *Server {
+type BudgetsResponse struct {
+	Result []service.Budget `json:"result"`
+}
+
+func AddServer(host string, authService *service.AuthService, transactionsService *service.TransactionService, categoryService *service.CategoryService, budgetService *service.BudgetService) *Server {
 	return &Server{
 		host:               host,
 		authService:        authService,
 		transactionService: transactionsService,
-		categoriesService:  categoriesService,
+		categoryService:    categoryService,
+		budgetService:      budgetService,
 	}
 }
 
@@ -105,6 +125,7 @@ func (s *Server) Start(port string) {
 
 	auth := api.Group("/auth")
 	auth.POST("/register", s.register)
+	auth.POST("/register/is-valid", s.isValid)
 	auth.POST("/login", s.login)
 
 	transactions := api.Group("/transactions")
@@ -117,6 +138,11 @@ func (s *Server) Start(port string) {
 	categories := api.Group("/categories")
 	categories.Use(s.middleware)
 	categories.GET("", s.categories)
+
+	budgets := api.Group("/budgets")
+	budgets.Use(s.middleware)
+	budgets.POST("", s.addBudget)
+	budgets.GET("", s.budgets)
 
 	router.Run(":" + port)
 }
@@ -143,6 +169,30 @@ func (s *Server) middleware(c *gin.Context) {
 	c.Next()
 }
 
+func (s *Server) isValidUser(data UserFormat) (bool, string) {
+	if !latinRegexp.MatchString(data.Username) || !latinRegexp.MatchString(data.Password) {
+		return false, "Имя пользователя и пароль должны состоять только из латинских букв, цифр и особых символов"
+	}
+
+	if len(data.Username) < 4 {
+		return false, "Имя пользователя должно быть минимум из 4 символов"
+	}
+
+	if len(data.Username) > 20 {
+		return false, "Имя пользователя должно быть максимум из 20 символов"
+	}
+
+	if len(data.Password) < 4 {
+		return false, "Пароль должнен быть минимум из 4 символов"
+	}
+
+	if len(data.Password) > 30 {
+		return false, "Пароль должнен быть максимум из 30 символов"
+	}
+
+	return true, ""
+}
+
 // @Summary 		Регистрация нового пользователя
 // @Description  	Создает аккаунт в системе.
 // @Tags         	auth
@@ -162,17 +212,56 @@ func (s *Server) register(c *gin.Context) {
 		return
 	}
 
+	if isValid, errString := s.isValidUser(data); !isValid {
+		c.JSON(http.StatusBadRequest, gin.H{"error": errString})
+		return
+	}
+
 	if err := s.authService.Register(data.Username, data.Password); err != nil {
 		log.Println(err)
-		if errors.Is(err, repository.ErrUserAlreadyExists) {
-			c.JSON(http.StatusConflict, gin.H{"error": "Данное имя пользователя уже используется"})
-			return
+		if errors.Is(err, apperr.NotUnique) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Данное имя пользователя уже используется"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка регистрации пользователя"})
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка регистрации пользователя"})
 		return
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"message": "Успешная регистрация"})
+}
+
+// @Summary 		Проверка возможности регистрации пользователя с указанными данными
+// @Description  	Проверяет данны по внутренним параметрам, а также уникальности имени пользователя
+// @Tags         	auth
+// @Accept       	json
+// @Produce      	json
+// @Param        	input body UserFormat true 	"Логин и пароль для регистрации"
+// @Success      	200  {object}  MessageResponse 	"Регистрация возможна"
+// @Failure      	400  {object}  ErrorResponse 	"Неверно заполнены поля"
+// @Failure      	400  {object}  ErrorResponse 	"Имя пользователя и пароль должны состоять только из латинских букв, цифр и особых символов"
+// @Failure      	400  {object}  ErrorResponse 	"Имя пользователя должно быть минимум из 4 символов"
+// @Failure      	400  {object}  ErrorResponse 	"Имя пользователя должно быть максимум из 20 символов"
+// @Failure      	400  {object}  ErrorResponse 	"Пароль должнен быть минимум из 4 символов"
+// @Failure      	400  {object}  ErrorResponse 	"Пароль должнен быть максимум из 30 символов"
+// @Failure      	409  {object}  ErrorResponse 	"Данное имя пользователя уже используется"
+// @Failure      	500  {object}  ErrorResponse 	"Ошибка при проверке данных"
+// @Router       	/auth/register/is-valid [post]
+func (s *Server) isValid(c *gin.Context) {
+	var data UserFormat
+	if err := c.ShouldBindJSON(&data); err != nil {
+		log.Println(err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверно заполнены поля"})
+		return
+	}
+
+	isValid, errString := s.isValidUser(data)
+
+	if !isValid {
+		c.JSON(http.StatusBadRequest, gin.H{"error": errString})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Регистрация возможна"})
 }
 
 // @Summary 		Авторизация пользователя
@@ -222,7 +311,7 @@ func (s *Server) login(c *gin.Context) {
 // @Success      	200  {object}  MessageResponse 	"Успешно"
 // @Failure      	400  {object}  ErrorResponse 	"Неверно заполнены поля"
 // @Failure      	401  {object}  ErrorResponse 	"Ошибка авторизации"
-// @Failure      	500  {object}  ErrorResponse 	"Ошибка при добавления транзакции"
+// @Failure      	500  {object}  ErrorResponse 	"Ошибка при создании транзакции"
 // @Router       	/transactions [post]
 func (s *Server) addTransaction(c *gin.Context) {
 	var data AddTransactionFormat
@@ -244,7 +333,7 @@ func (s *Server) addTransaction(c *gin.Context) {
 	_, err = s.transactionService.AddTransaction(id, data.Amount, data.Category, data.Description, date)
 	if err != nil {
 		log.Println(err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при добавления транзакции"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при создании транзакции"})
 		return
 	}
 
@@ -262,6 +351,7 @@ func (s *Server) addTransaction(c *gin.Context) {
 // @Failure      	400  	{object}  	ErrorResponse 	"Неверно заполнены поля"
 // @Failure      	400  	{object}  	ErrorResponse 	"Неверно указано ID транзакции"
 // @Failure      	401  	{object}  	ErrorResponse 	"Ошибка авторизации"
+// @Failure      	404  	{object}  	ErrorResponse 	"Данная транзакция отсутствует"
 // @Failure      	500  	{object}  	ErrorResponse 	"Ошибка при обновлении транзакции"
 // @Router       	/transactions/{id} [patch]
 func (s *Server) updateTransaction(c *gin.Context) {
@@ -289,9 +379,15 @@ func (s *Server) updateTransaction(c *gin.Context) {
 		return
 	}
 
-	if err := s.transactionService.UpdateTransaction(userID, uint(transactionID), data.Amount, data.Category, data.Description, date); err != nil {
+	success, err := s.transactionService.UpdateTransaction(userID, uint(transactionID), data.Amount, data.CategoryID, data.Description, date)
+	if err != nil {
 		log.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при обновлении транзакции"})
+		return
+	}
+
+	if !success {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Данная транзакция отсутствует"})
 		return
 	}
 
@@ -307,6 +403,7 @@ func (s *Server) updateTransaction(c *gin.Context) {
 // @Success      	200  	{object}  	MessageResponse "Успешно"
 // @Failure      	400  	{object}  	ErrorResponse 	"Неверно указано ID транзакции"
 // @Failure      	401  	{object}  	ErrorResponse 	"Ошибка авторизации"
+// @Failure      	404  	{object}  	ErrorResponse 	"Данная транзакция отсутствует"
 // @Failure      	500  	{object}  	ErrorResponse 	"Ошибка при удалениии транзакции"
 // @Router       	/transactions/{id} [delete]
 func (s *Server) deleteTransaction(c *gin.Context) {
@@ -320,9 +417,15 @@ func (s *Server) deleteTransaction(c *gin.Context) {
 		return
 	}
 
-	if err := s.transactionService.DeleteTransaction(id, uint(transactionID)); err != nil {
+	success, err := s.transactionService.DeleteTransaction(id, uint(transactionID))
+	if err != nil {
 		log.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при удалении транзакции"})
+		return
+	}
+
+	if !success {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Данная транзакция отсутствует"})
 		return
 	}
 
@@ -371,7 +474,7 @@ func (s *Server) transactions(c *gin.Context) {
 
 	id := c.GetUint("jwt")
 
-	var result []repository.Transaction
+	var result []service.Transaction
 
 	if data.From == "" && data.To == "" {
 		result, err = s.transactionService.Transactions(id, data.Limit, data.Page)
@@ -402,7 +505,7 @@ func (s *Server) transactions(c *gin.Context) {
 // @Router       	/system-categories [get]
 // @Ignore
 func (s *Server) systemCategories(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"result": s.categoriesService.SystemCategories()})
+	c.JSON(http.StatusOK, gin.H{"result": s.categoryService.SystemCategories()})
 }
 
 // @Summary 		Получение списка пользовательских категорий
@@ -417,7 +520,7 @@ func (s *Server) systemCategories(c *gin.Context) {
 func (s *Server) userCategories(c *gin.Context) {
 	id := c.GetUint("jwt")
 
-	result, err := s.categoriesService.UserCategories(id)
+	result, err := s.categoryService.UserCategories(id)
 
 	if err != nil {
 		log.Println(err)
@@ -439,11 +542,84 @@ func (s *Server) userCategories(c *gin.Context) {
 func (s *Server) categories(c *gin.Context) {
 	id := c.GetUint("jwt")
 
-	result, err := s.categoriesService.Categories(id)
+	result, err := s.categoryService.Categories(id)
 
 	if err != nil {
 		log.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при получении категорий"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"result": result})
+}
+
+// @Summary 		Создание бюджета
+// @Description  	Создает бюджет от имени авторизированного пользователя
+// @Tags         	budgets
+// @Accept       	json
+// @Produce      	json
+// @Param        	input body AddBudgetFormat true "Категория и лимит"
+// @Success      	200  {object}  MessageResponse 	"Успешно"
+// @Failure      	400  {object}  ErrorResponse 	"Неверно заполнены поля"
+// @Failure      	401  {object}  ErrorResponse 	"Ошибка авторизации"
+// @Failure      	500  {object}  ErrorResponse 	"Ошибка при создании бюджета"
+// @Router       	/budgets [post]
+func (s *Server) addBudget(c *gin.Context) {
+	var data AddBudgetFormat
+	if err := c.ShouldBindJSON(&data); err != nil {
+		log.Println(err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверно заполнены поля"})
+		return
+	}
+
+	id := c.GetUint("jwt")
+
+	if err := s.budgetService.AddBudget(id, data.CategoryID, data.Limit); err != nil {
+		log.Println(err)
+		if errors.Is(err, apperr.NotUnique) {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Бюджет с данной категорией уже существует"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при создании бюджета"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Успешно"})
+}
+
+// @Summary 		Получение информации по бюджетам
+// @Description  	Возвращает список бюджет и текущие затраты по ним
+// @Tags         	budgets
+// @Accept       	json
+// @Produce      	json
+// @Param        	query query BudgetsFilter true "Дата в котором рассамтривается бюджет, из нее берется год и месяц"
+// @Success      	200  {object}  BudgetsResponse 			"Успешное получение бюджетов"
+// @Failure      	400  {object}  ErrorResponse 			"Неверно заполнена дата"
+// @Failure      	401  {object}  ErrorResponse 			"Ошибка авторизации"
+// @Failure      	500  {object}  ErrorResponse 			"Ошибка при получении бюджетов"
+// @Router       	/budgets [get]
+func (s *Server) budgets(c *gin.Context) {
+	var data BudgetsFilter
+	if err := c.ShouldBindQuery(&data); err != nil {
+		log.Println(err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверно заполнена дата"})
+		return
+	}
+
+	parsedDate, err := time.Parse("2006-01-02", data.Date)
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверно заполнена дата"})
+		return
+	}
+
+	id := c.GetUint("jwt")
+
+	result, err := s.budgetService.Budgets(id, parsedDate)
+
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при получении бюджетов"})
 		return
 	}
 

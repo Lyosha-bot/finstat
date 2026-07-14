@@ -39,19 +39,9 @@ func (s *CategoryService) SystemCategories() []Category {
 }
 
 func (s *CategoryService) UserCategories(userID uint) ([]Category, error) {
-	categories, err := s.repo.UserCategories(userID)
-	if err != nil {
-		return nil, ewrap.Wrap("Couldn't get categories", err)
-	}
-
-	return categories, err
+	return s.repo.UserCategories(userID)
 }
 
 func (s *CategoryService) Categories(userID uint) ([]Category, error) {
-	categories, err := s.repo.Categories(userID)
-	if err != nil {
-		return nil, ewrap.Wrap("Couldn't get categories", err)
-	}
-
-	return categories, err
+	return s.repo.Categories(userID)
 }

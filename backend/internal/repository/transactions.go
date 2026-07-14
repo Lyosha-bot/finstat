@@ -10,7 +10,7 @@ import (
 
 const (
 	ADD_TRANSACTION_QUERY = `
-		INSERT INTO transactions (user_id, amount, category_id, description, date)
+		INSERT INTO transactions (user_id, value, category_id, description, date)
 		SELECT $1, $2, id, $4, $5
 		FROM categories
 		WHERE id = $3 AND (user_id IS NULL OR user_id = $1)
@@ -19,21 +19,41 @@ const (
 
 	UPDATE_TRANSACTION_QUERY = `
 		UPDATE transactions
-		SET amount = $3, category_id = $4, description = $5, date = $6
+		SET 
+			value = $3,
+			category_id = $4,
+			description = $5,
+			date = $6
 		WHERE id = $2 AND user_id = $1
 		RETURNING TRUE;
 	`
 
 	DELETE_TRANSACTION_QUERY = `
 		DELETE FROM transactions
-		WHERE id = $2 AND user_id = $1
-		RETURNING TRUE;
+		WHERE id = $2 AND user_id = $1;
 	`
 
-	TRANSACTION_BY_ID_QUERY = `SELECT (id, user_id, amount, description, date) FROM transactions WHERE user_id = $1 AND id = $2;`
+	TRANSACTION_BY_ID_QUERY = `
+		SELECT (
+			id,
+			user_id,
+			value,
+			description,
+			date
+		)
+		FROM transactions 
+		WHERE user_id = $1 AND id = $2;
+	`
 
 	TRANSACTIONS_QUERY = `
-		SELECT (id, user_id, amount, category_id, description, date) 
+		SELECT (
+			id,
+			user_id,
+			value,
+			category_id,
+			description,
+			date 
+		)
 		FROM transactions 
 		WHERE user_id = $1
 		ORDER BY date DESC
@@ -41,15 +61,32 @@ const (
 		OFFSET $3;
 	`
 	TRANSACTIONS_IN_PERIOD_QUERY = `
-		SELECT (id, user_id, amount, category_id, description, date) 
+		SELECT (
+			id,
+			user_id,
+			value,
+			category_id,
+			description,
+			date
+		)
 		FROM transactions 
-		WHERE user_id = $1 AND date >= $2 AND date <= $3
+		WHERE 
+			user_id = $1 
+			AND date >= $2 
+			AND date <= $3
 		ORDER BY date DESC
 		LIMIT $4
 		OFFSET $5;
 	`
 	TRANSACTIONS_BEFORE_DATE_QUERY = `
-		SELECT (id, user_id, amount, category_id, description, date) 
+		SELECT (
+			id,
+			user_id,
+			value,
+			category_id,
+			description,
+			date
+		)
 		FROM transactions 
 		WHERE user_id = $1 AND date <= $2
 		ORDER BY date DESC
@@ -58,7 +95,13 @@ const (
 	`
 
 	TRANSACTIONS_AFTER_DATE_QUERY = `
-		SELECT (id, user_id, amount, description, date) 
+		SELECT (
+			id,
+			user_id,
+			value,
+			description,
+			date
+		)
 		FROM transactions 
 		WHERE user_id = $1 AND date >= $2
 		ORDER BY date DESC
@@ -68,15 +111,15 @@ const (
 )
 
 type Transaction struct {
-	ID          uint            `json:"id"`
-	UserID      uint            `json:"userID"`
-	Amount      decimal.Decimal `json:"amount"`
-	CategoryID  uint            `json:"category_id"`
-	Description string          `json:"description"`
-	Date        time.Time       `json:"date"`
+	ID          uint            `json:"id" db:"id"`
+	UserID      uint            `json:"userID" db:"user_id"`
+	Value       decimal.Decimal `json:"value" db:"value"`
+	CategoryID  uint            `json:"category_id" db:"category_id"`
+	Description string          `json:"description" db:"description"`
+	Date        time.Time       `json:"date" db:"date"`
 }
 
-func (c *Client) AddTransaction(userID uint, amount decimal.Decimal, categoryID uint, description string, date time.Time) (uint, error) {
+func (c *Client) AddTransaction(userID uint, value decimal.Decimal, categoryID uint, description string, date time.Time) (uint, error) {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -85,7 +128,7 @@ func (c *Client) AddTransaction(userID uint, amount decimal.Decimal, categoryID 
 	}
 	defer conn.Release()
 
-	row := conn.QueryRow(ctx, ADD_TRANSACTION_QUERY, userID, amount, categoryID, description, date)
+	row := conn.QueryRow(ctx, ADD_TRANSACTION_QUERY, userID, value, categoryID, description, date)
 
 	var id uint
 	err = row.Scan(&id)
@@ -96,42 +139,40 @@ func (c *Client) AddTransaction(userID uint, amount decimal.Decimal, categoryID 
 	return id, nil
 }
 
-func (c *Client) UpdateTransaction(userID uint, transactionID uint, newAmount decimal.Decimal, newCategoryID uint, newDescription string, newDate time.Time) error {
+func (c *Client) UpdateTransaction(userID uint, transactionID uint, newValue decimal.Decimal, newCategoryID uint, newDescription string, newDate time.Time) (bool, error) {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
 	if err != nil {
-		return ewrap.Wrap("Couldn't acquire connection", err)
+		return false, ewrap.Wrap("Couldn't acquire connection", err)
 	}
 	defer conn.Release()
 
-	row := conn.QueryRow(ctx, UPDATE_TRANSACTION_QUERY, userID, transactionID, newAmount, newCategoryID, newDescription, newDate)
+	cmdTag, err := conn.Exec(ctx, UPDATE_TRANSACTION_QUERY, userID, transactionID, newValue, newCategoryID, newDescription, newDate)
 
-	var success bool
-	if err := row.Scan(&success); err != nil {
-		return ewrap.Wrap("Couldn't get updated transaction id", err)
+	if err != nil {
+		return false, ewrap.Wrap("Couldn't update transaction", err)
 	}
 
-	return nil
+	return cmdTag.RowsAffected() != 0, nil
 }
 
-func (c *Client) DeleteTransaction(userID uint, transactionID uint) error {
+func (c *Client) DeleteTransaction(userID uint, transactionID uint) (bool, error) {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
 	if err != nil {
-		return ewrap.Wrap("Couldn't acquire connection", err)
+		return false, ewrap.Wrap("Couldn't acquire connection", err)
 	}
 	defer conn.Release()
 
-	row := conn.QueryRow(ctx, DELETE_TRANSACTION_QUERY, userID, transactionID)
+	cmdTag, err := conn.Exec(ctx, DELETE_TRANSACTION_QUERY, userID, transactionID)
 
-	var success bool
-	if err := row.Scan(&success); err != nil {
-		return ewrap.Wrap("Couldn't delete transaction id", err)
+	if err != nil {
+		return false, ewrap.Wrap("Couldn't delete transaction", err)
 	}
 
-	return nil
+	return cmdTag.RowsAffected() != 0, nil
 }
 
 func (c *Client) TransactionByID(userID, transactionID uint) (*Transaction, error) {

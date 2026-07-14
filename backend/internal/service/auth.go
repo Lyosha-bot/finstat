@@ -1,7 +1,6 @@
 package service
 
 import (
-	"errors"
 	ewrap "finstat/internal/lib"
 	"finstat/internal/repository"
 	"finstat/internal/token"
@@ -12,7 +11,7 @@ import (
 const TOKEN_LIFE_TIME = 15
 
 type AuthRepo interface {
-	InsertUser(username, password string) (uint, error)
+	InsertUser(username, password string) error
 	User(username string) (*repository.User, error)
 }
 
@@ -34,11 +33,7 @@ func (s *AuthService) Register(username, password string) error {
 		return ewrap.Wrap("Couldn't generate hashed password", err)
 	}
 
-	_, err = s.repo.InsertUser(username, string(hashedPassword))
-	if err != nil {
-		if errors.Is(err, repository.ErrUserAlreadyExists) {
-			return err
-		}
+	if err := s.repo.InsertUser(username, string(hashedPassword)); err != nil {
 		return ewrap.Wrap("Couldn't insert new user", err)
 	}
 

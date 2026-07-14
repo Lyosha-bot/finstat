@@ -1,0 +1,147 @@
+package repository
+
+import (
+	"context"
+	"errors"
+	"finstat/internal/apperr"
+	ewrap "finstat/internal/lib"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/shopspring/decimal"
+)
+
+const (
+	ADD_BUDGET_QUERY = `
+		INSERT INTO budgets (user_id, category_id, limit_value) 
+		VALUES ($1, $2, $3);
+	`
+
+	UPDATE_BUDGET_QUERY = `
+		UPDATE budgets
+		SET 
+			limit_value = $3
+		WHERE id = $2 AND user_id = $1;
+	`
+
+	DELETE_BUDGET_QUERY = `
+		DELETE FROM budgets
+		WHERE id = $2 AND user_id = $1;
+	`
+
+	BUDGETS_QUERY = `
+		SELECT 
+			b.id,
+			COALESCE(c.name, 'Все категории'),
+			b.limit_value,
+			COALESCE(SUM(t.value), 0)
+		FROM budgets b
+		LEFT JOIN categories c ON c.id = b.category_id
+		LEFT JOIN transactions t ON t.user_id = b.user_id 
+			AND (b.category_id IS NULL OR t.category_id = b.category_id) 
+			AND t.date >= $2 
+			AND t.date < $3
+		WHERE b.user_id = $1
+		GROUP BY b.id, c.name;
+	`
+)
+
+type Budget struct {
+	ID           uint            `json:"id" db:"id"`
+	Name         string          `json:"name" db:"name"`
+	LimitValue   decimal.Decimal `json:"limit_value" db:"limit_value"`
+	CurrentValue decimal.Decimal `json:"current_value" db:"current_value"`
+}
+
+func (c *Client) AddBudget(userID, categoryID uint, limit decimal.Decimal) error {
+	ctx := context.Background()
+
+	conn, err := c.pool.Acquire(ctx)
+	if err != nil {
+		return ewrap.Wrap("Couldn't acquire connection", err)
+	}
+	defer conn.Release()
+
+	_, err = conn.Exec(ctx, ADD_BUDGET_QUERY, userID, categoryID, limit)
+
+	if err != nil {
+		var pgErr *pgconn.PgError
+
+		if errors.As(err, &pgErr) {
+			if pgErr.Code == "23505" {
+				return apperr.NotUnique
+			}
+		}
+
+		return ewrap.Wrap("Couldn't add new budget", err)
+	}
+
+	return nil
+}
+
+func (c *Client) UpdateBudget(userID, categoryID uint, newLimit decimal.Decimal) (bool, error) {
+	ctx := context.Background()
+
+	conn, err := c.pool.Acquire(ctx)
+	if err != nil {
+		return false, ewrap.Wrap("Couldn't acquire connection", err)
+	}
+	defer conn.Release()
+
+	cmdTag, err := conn.Exec(ctx, UPDATE_BUDGET_QUERY, userID, categoryID, newLimit)
+
+	if err != nil {
+		return false, ewrap.Wrap("Couldn't update budget", err)
+	}
+
+	return cmdTag.RowsAffected() != 0, nil
+}
+
+func (c *Client) DeleteBudget(userID, categoryID uint) (bool, error) {
+	ctx := context.Background()
+
+	conn, err := c.pool.Acquire(ctx)
+	if err != nil {
+		return false, ewrap.Wrap("Couldn't acquire connection", err)
+	}
+	defer conn.Release()
+
+	cmdTag, err := conn.Exec(ctx, DELETE_BUDGET_QUERY, userID, categoryID)
+
+	if err != nil {
+		return false, ewrap.Wrap("Couldn't delete budget", err)
+	}
+
+	return cmdTag.RowsAffected() != 0, nil
+}
+
+func (c *Client) Budgets(userID uint, from, to time.Time) ([]Budget, error) {
+	ctx := context.Background()
+
+	conn, err := c.pool.Acquire(ctx)
+	if err != nil {
+		return nil, ewrap.Wrap("Couldn't acquire connection", err)
+	}
+	defer conn.Release()
+
+	rows, err := conn.Query(ctx, BUDGETS_QUERY, userID, from, to)
+	if err != nil {
+		return nil, ewrap.Wrap("Couldn't get budgets data", err)
+	}
+
+	result := make([]Budget, 0, 5)
+	for rows.Next() {
+		var val Budget
+		if err = rows.Scan(&val.ID, &val.Name, &val.LimitValue, &val.CurrentValue); err != nil {
+			return nil, ewrap.Wrap("Couldn't scan budget", err)
+		}
+
+		result = append(result, val)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, ewrap.Wrap("Couldn't iterate budgets", err)
+	}
+
+	return result, nil
+}

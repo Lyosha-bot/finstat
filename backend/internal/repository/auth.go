@@ -3,18 +3,29 @@ package repository
 import (
 	"context"
 	"errors"
+	"finstat/internal/apperr"
 	ewrap "finstat/internal/lib"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
 const (
-	ADD_USER_QUERY = "INSERT INTO users (name, password) VALUES ($1, $2) RETURNING id"
+	ADD_USER_QUERY = `
+		INSERT INTO users (name, password)
+		VALUES ($1, $2);
+	`
 
-	USER_QUERY = "SELECT (id, name, password) FROM users WHERE name = $1"
+	USER_QUERY = `
+		SELECT (
+			id,
+			name,
+			password
+		)
+		FROM users
+		WHERE name = $1;
+	`
 )
-
-var ErrUserAlreadyExists = errors.New("user already exists")
 
 type User struct {
 	ID             uint
@@ -22,30 +33,30 @@ type User struct {
 	HashedPassword string
 }
 
-func (c *Client) InsertUser(username, password string) (uint, error) {
+func (c *Client) InsertUser(username, password string) error {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
 	if err != nil {
-		return 0, ewrap.Wrap("Couldn't acquire connection", err)
+		return ewrap.Wrap("Couldn't acquire connection", err)
 	}
 	defer conn.Release()
 
-	row := conn.QueryRow(ctx, ADD_USER_QUERY, username, password)
+	_, err = conn.Exec(ctx, ADD_USER_QUERY, username, password)
 
-	var id uint
-	err = row.Scan(&id)
 	if err != nil {
 		var pgErr *pgconn.PgError
+
 		if errors.As(err, &pgErr) {
 			if pgErr.Code == "23505" {
-				return 0, ErrUserAlreadyExists
+				return apperr.NotUnique
 			}
 		}
-		return 0, ewrap.Wrap("Couldn't get ID of new user", err)
+
+		return ewrap.Wrap("Couldn't insert user", err)
 	}
 
-	return id, nil
+	return nil
 }
 
 func (c *Client) User(username string) (*User, error) {
@@ -62,6 +73,9 @@ func (c *Client) User(username string) (*User, error) {
 	var result User
 	err = row.Scan(&result)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperr.NoRow
+		}
 		return nil, ewrap.Wrap("Couldn't get user data", err)
 	}
 

@@ -35,7 +35,9 @@ func main() {
 		log.Fatalln(ewrap.Wrap("Couldn't get system categories", err))
 	}
 
-	server := server.AddServer(os.Getenv("HOST"), authService, transactionsService, categoryService)
+	budgetService := service.NewBudgetService(repo)
+
+	server := server.AddServer(os.Getenv("HOST"), authService, transactionsService, categoryService, budgetService)
 
 	log.Println("Backend is running")
 

@@ -9,30 +9,36 @@ const (
 	ADD_CATEGORY_QUERY = `INSERT INTO categories (user_id, name) VALUES ($1, $2) RETURNING id`
 
 	SYSTEM_CATEGORIES_QUERY = `
-		SELECT (id, name)
+		SELECT (
+			id,
+			name
+		)
 		FROM categories
 		WHERE user_id is NULL;
 	`
 
 	USER_CATEGORIES_QUERY = `
-		SELECT (id, name)
+		SELECT (
+			id,
+			name
+		)
 		FROM categories
 		WHERE user_id = $1;
 	`
 
 	CATEGORIES_QUERY = `
-		SELECT (id, name)
+		SELECT (
+			id,
+			name
+		)
 		FROM categories
 		WHERE user_id IS NULL OR user_id = $1;
-	`
-	CATEGORY_EXISTS = `
-
 	`
 )
 
 type Category struct {
-	ID   uint   `json:"id"`
-	Name string `json:"name"`
+	ID   uint   `json:"id" db:"id"`
+	Name string `json:"name" db:"name"`
 }
 
 func (c *Client) AddCategory(userID uint, categoryName string) (uint, error) {
