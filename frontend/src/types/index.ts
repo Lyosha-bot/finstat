@@ -1,10 +1,10 @@
 export interface Transaction {
   id: number
-  date: string
+  userID: number
+  value: number          
+  category_id: number
   description: string
-  amount: number
-  category: string
-  type: 'income' | 'expense'
+  date: string
 }
 
 export interface Budget {

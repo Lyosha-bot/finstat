@@ -5,8 +5,8 @@ interface FiltersProps {
   setPeriodFilter: (val: any) => void
   filterType: 'all' | 'income' | 'expense'
   setFilterType: (val: any) => void
-  filterCategory: string
-  setFilterCategory: (val: string) => void
+  filterCategory: number | 'all'   // теперь ID категории или 'all'
+  setFilterCategory: (val: number | 'all') => void
   searchQuery: string
   setSearchQuery: (val: string) => void
   categories: Category[]
@@ -44,10 +44,16 @@ export const Filters = ({
       </div>
       <div className="filter-group">
         <label>Категория</label>
-        <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
+        <select
+          value={filterCategory === 'all' ? 'all' : filterCategory}
+          onChange={(e) => {
+            const val = e.target.value
+            setFilterCategory(val === 'all' ? 'all' : Number(val))
+          }}
+        >
           <option value="all">Все</option>
           {categories.map(cat => (
-            <option key={cat.id} value={cat.name}>{cat.name}</option>
+            <option key={cat.id} value={cat.id}>{cat.name}</option>
           ))}
         </select>
       </div>

@@ -12,6 +12,42 @@ export const Login = ({ onLogin }: LoginProps) => {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [isChecking, setIsChecking] = useState(false)
+
+  // Проверка регистрации при потере фокуса
+  const validateRegistration = async () => {
+    if (!isRegister) return
+    if (!username.trim() || !password.trim()) {
+      setError('') // если поля пустые
+      return
+    }
+    if (password !== confirmPassword) {
+      setError('Пароли не совпадают')
+      return
+    }
+    setIsChecking(true)
+    try {
+      await checkRegisterValidity(username, password)
+      setError('') // если всё ок
+    } catch (err: any) {
+      setError(err.message || 'Ошибка проверки')
+    } finally {
+      setIsChecking(false)
+    }
+  }
+
+  // Обработчики потери фокуса
+  const handleUsernameBlur = () => {
+    if (username.trim()) validateRegistration()
+  }
+
+  const handlePasswordBlur = () => {
+    if (password.trim()) validateRegistration()
+  }
+
+  const handleConfirmPasswordBlur = () => {
+    if (confirmPassword.trim()) validateRegistration()
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -24,18 +60,17 @@ export const Login = ({ onLogin }: LoginProps) => {
       return
     }
 
+    if (isRegister && password !== confirmPassword) {
+      setError('Пароли не совпадают')
+      setLoading(false)
+      return
+    }
+
     try {
       if (isRegister) {
-        if (password !== confirmPassword) {
-          setError('Пароли не совпадают')
-          setLoading(false)
-          return
-        }
-        // Проверяем возможность регистрации
+        // Перед регистрацией можно ещё раз проверить (на случай, если проверка не сработала)
         await checkRegisterValidity(username, password)
-        // Регистрируем
         await register(username, password)
-        // Автоматический вход
         await login(username, password)
       } else {
         await login(username, password)
@@ -56,6 +91,7 @@ export const Login = ({ onLogin }: LoginProps) => {
     setError('')
     setPassword('')
     setConfirmPassword('')
+    setUsername('')
   }
 
   return (
@@ -70,6 +106,7 @@ export const Login = ({ onLogin }: LoginProps) => {
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
+              onBlur={handleUsernameBlur}
               placeholder="Введите логин"
               required
             />
@@ -80,6 +117,7 @@ export const Login = ({ onLogin }: LoginProps) => {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              onBlur={handlePasswordBlur}
               placeholder="Введите пароль"
               required
             />
@@ -91,13 +129,15 @@ export const Login = ({ onLogin }: LoginProps) => {
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
+                onBlur={handleConfirmPasswordBlur}
                 placeholder="Повторите пароль"
                 required
               />
             </div>
           )}
           {error && <div className="login-error">{error}</div>}
-          <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={loading}>
+          {isChecking && <div className="login-info">Проверка данных...</div>}
+          <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={loading || isChecking}>
             {loading ? 'Загрузка...' : isRegister ? 'Зарегистрироваться' : 'Войти'}
           </button>
         </form>

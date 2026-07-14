@@ -1,4 +1,5 @@
 export const formatMoney = (amount: number): string => {
+  if (isNaN(amount)) return '0 ₽' // защита от NaN
   return new Intl.NumberFormat('ru-RU', {
     style: 'currency',
     currency: 'RUB',
