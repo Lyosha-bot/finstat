@@ -13,9 +13,7 @@ type TransactionRepo interface {
 	AddTransaction(userID uint, value decimal.Decimal, categoryID uint, description string, date time.Time) (uint, error)
 	UpdateTransaction(userID uint, transactionID uint, newValue decimal.Decimal, newCategoryID uint, newDescription string, newDate time.Time) (bool, error)
 	DeleteTransaction(userID uint, transactionID uint) (bool, error)
-	Transactions(userID, limit, page uint) ([]Transaction, error)
-	TransactionsInPeriod(userID uint, limit, page uint, from, to time.Time) ([]Transaction, error)
-	TransactionsFromDate(userID uint, limit, page uint, date time.Time, order bool) ([]Transaction, error)
+	Transactions(userID, limit, page uint, from, to *time.Time, transactionType int, categories []uint) ([]Transaction, error)
 }
 
 type TransactionService struct {
@@ -40,14 +38,6 @@ func (s *TransactionService) DeleteTransaction(userID uint, transactionID uint) 
 	return s.repo.DeleteTransaction(userID, transactionID)
 }
 
-func (s *TransactionService) Transactions(userID, limit, page uint) ([]repository.Transaction, error) {
-	return s.repo.Transactions(userID, limit, page)
-}
-
-func (s *TransactionService) TransactionsInPeriod(userID, limit, page uint, from, to time.Time) ([]repository.Transaction, error) {
-	return s.repo.TransactionsInPeriod(userID, limit, page, from, to)
-}
-
-func (s *TransactionService) TransactionsFromDate(userID uint, limit, page uint, date time.Time, order bool) ([]repository.Transaction, error) {
-	return s.repo.TransactionsFromDate(userID, limit, page, date, order)
+func (s *TransactionService) Transactions(userID, limit, page uint, from, to *time.Time, transactionType int, categories []uint) ([]repository.Transaction, error) {
+	return s.repo.Transactions(userID, limit, page, from, to, transactionType, categories)
 }
