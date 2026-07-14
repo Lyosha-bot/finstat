@@ -73,8 +73,13 @@ type Server struct {
 }
 
 type UserFormat struct {
-	Username string `json:"username" binding:"required,alphanum"`
+	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
+}
+
+type IsUserValidFormat struct {
+	Username string `json:"username" binding:"omitempty"`
+	Password string `json:"password" binding:"omitempty"`
 }
 
 type AddTransactionFormat struct {
@@ -96,8 +101,8 @@ type DeleteTransactionFormat struct {
 }
 
 type TransactionsFilter struct {
-	Limit      uint           `form:"limit" binding:"numeric,min=1"`
-	Page       uint           `form:"page" binding:"numeric,min=1"`
+	Limit      uint           `form:"limit" binding:"required,numeric,min=1"`
+	Page       uint           `form:"page" binding:"required,numeric,min=1"`
 	From       string         `form:"from" binding:"omitempty,datetime=2006-01-02"`
 	To         string         `form:"to" binding:"omitempty,datetime=2006-01-02"`
 	Type       int            `form:"type" binding:"omitempty,numeric,min=-1,max=1"`
@@ -196,6 +201,14 @@ func (s *Server) middleware(c *gin.Context) {
 }
 
 func (s *Server) isValidUser(data UserFormat) (bool, string) {
+	if data.Username == "" {
+		return false, "Имя пользователя не может быть пустым"
+	}
+
+	if data.Password == "" {
+		return false, "Пароль не может быть пустым"
+	}
+
 	if !latinRegexp.MatchString(data.Username) || !latinRegexp.MatchString(data.Password) {
 		return false, "Имя пользователя и пароль должны состоять только из латинских букв, цифр и особых символов"
 	}
@@ -261,7 +274,7 @@ func (s *Server) register(c *gin.Context) {
 // @Tags         	auth
 // @Accept       	json
 // @Produce      	json
-// @Param        	input body UserFormat true 	"Логин и пароль для регистрации"
+// @Param        	input body IsUserValidFormat true 	"Логин и пароль для регистрации"
 // @Success      	200  {object}  MessageResponse 	"Регистрация возможна"
 // @Failure      	400  {object}  ErrorResponse 	"Неверно заполнены поля"
 // @Failure      	400  {object}  ErrorResponse 	"Имя пользователя и пароль должны состоять только из латинских букв, цифр и особых символов"
@@ -273,14 +286,19 @@ func (s *Server) register(c *gin.Context) {
 // @Failure      	500  {object}  ErrorResponse 	"Ошибка при проверке данных"
 // @Router       	/auth/register/is-valid [post]
 func (s *Server) isValid(c *gin.Context) {
-	var data UserFormat
+	var data IsUserValidFormat
 	if err := c.ShouldBindJSON(&data); err != nil {
 		log.Println(err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверно заполнены поля"})
 		return
 	}
 
-	isValid, errString := s.isValidUser(data)
+	user := UserFormat{
+		Username: data.Username,
+		Password: data.Password,
+	}
+
+	isValid, errString := s.isValidUser(user)
 
 	if !isValid {
 		c.JSON(http.StatusBadRequest, gin.H{"error": errString})
