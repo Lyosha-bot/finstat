@@ -79,7 +79,7 @@ func (c *Client) AddBudget(userID, categoryID uint, limit decimal.Decimal) error
 	return nil
 }
 
-func (c *Client) UpdateBudget(userID, categoryID uint, newLimit decimal.Decimal) (bool, error) {
+func (c *Client) UpdateBudget(userID, budgetID uint, newLimit decimal.Decimal) (bool, error) {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -88,7 +88,7 @@ func (c *Client) UpdateBudget(userID, categoryID uint, newLimit decimal.Decimal)
 	}
 	defer conn.Release()
 
-	cmdTag, err := conn.Exec(ctx, UPDATE_BUDGET_QUERY, userID, categoryID, newLimit)
+	cmdTag, err := conn.Exec(ctx, UPDATE_BUDGET_QUERY, userID, budgetID, newLimit)
 
 	if err != nil {
 		return false, ewrap.Wrap("Couldn't update budget", err)
@@ -97,7 +97,7 @@ func (c *Client) UpdateBudget(userID, categoryID uint, newLimit decimal.Decimal)
 	return cmdTag.RowsAffected() != 0, nil
 }
 
-func (c *Client) DeleteBudget(userID, categoryID uint) (bool, error) {
+func (c *Client) DeleteBudget(userID, budgetID uint) (bool, error) {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -106,7 +106,7 @@ func (c *Client) DeleteBudget(userID, categoryID uint) (bool, error) {
 	}
 	defer conn.Release()
 
-	cmdTag, err := conn.Exec(ctx, DELETE_BUDGET_QUERY, userID, categoryID)
+	cmdTag, err := conn.Exec(ctx, DELETE_BUDGET_QUERY, userID, budgetID)
 
 	if err != nil {
 		return false, ewrap.Wrap("Couldn't delete budget", err)

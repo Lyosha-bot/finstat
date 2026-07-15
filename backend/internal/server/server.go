@@ -111,7 +111,11 @@ type TransactionsFilter struct {
 
 type AddBudgetFormat struct {
 	CategoryID uint            `json:"category_id" binding:"required"`
-	Limit      decimal.Decimal `json:"limit" binding:"omitempty"`
+	Limit      decimal.Decimal `json:"limit" binding:"required"`
+}
+
+type UpdateBudgetFormat struct {
+	Limit decimal.Decimal `json:"limit" binding:"required"`
 }
 
 type BudgetsFilter struct {
@@ -174,6 +178,8 @@ func (s *Server) Start(port string) {
 	budgets.Use(s.middleware)
 	budgets.POST("", s.addBudget)
 	budgets.GET("", s.budgets)
+	budgets.PATCH("/:id", s.updateBudget)
+	budgets.DELETE("/:id", s.deleteBudget)
 
 	router.Run(":" + port)
 }
@@ -372,9 +378,9 @@ func (s *Server) addTransaction(c *gin.Context) {
 		return
 	}
 
-	id := c.GetUint("jwt")
+	userID := c.GetUint("jwt")
 
-	_, err = s.transactionService.AddTransaction(id, data.Amount, data.Category, data.Description, date)
+	_, err = s.transactionService.AddTransaction(userID, data.Amount, data.Category, data.Description, date)
 	if err != nil {
 		log.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при создании транзакции"})
@@ -390,7 +396,7 @@ func (s *Server) addTransaction(c *gin.Context) {
 // @Accept       	json
 // @Produce      	json
 // @Param			id 		path 		int 					true 	"ID транзакции"
-// @Param        	input 	body 		UpdateTransactionFormat true "Новая информация о транзакции"
+// @Param        	input 	body 		UpdateTransactionFormat true 	"Новая информация о транзакции"
 // @Success      	200  	{object}  	MessageResponse "Успешно"
 // @Failure      	400  	{object}  	ErrorResponse 	"Неверно заполнены поля"
 // @Failure      	400  	{object}  	ErrorResponse 	"Неверно указано ID транзакции"
@@ -399,6 +405,14 @@ func (s *Server) addTransaction(c *gin.Context) {
 // @Failure      	500  	{object}  	ErrorResponse 	"Ошибка при обновлении транзакции"
 // @Router       	/transactions/{id} [patch]
 func (s *Server) updateTransaction(c *gin.Context) {
+	paramID := c.Param("id")
+	transactionID, err := strconv.ParseUint(paramID, 10, 64)
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверно указано ID транзакции"})
+		return
+	}
+
 	var data UpdateTransactionFormat
 	if err := c.ShouldBindJSON(&data); err != nil {
 		log.Println(err)
@@ -414,14 +428,6 @@ func (s *Server) updateTransaction(c *gin.Context) {
 	}
 
 	userID := c.GetUint("jwt")
-
-	paramID := c.Param("id")
-	transactionID, err := strconv.ParseUint(paramID, 10, 64)
-	if err != nil {
-		log.Println(err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверно указано ID транзакции"})
-		return
-	}
 
 	success, err := s.transactionService.UpdateTransaction(userID, uint(transactionID), data.Amount, data.CategoryID, data.Description, date)
 	if err != nil {
@@ -439,7 +445,7 @@ func (s *Server) updateTransaction(c *gin.Context) {
 }
 
 // @Summary 		Удаление транзакции
-// @Description  	Удаление транзакции
+// @Description  	Удаление транзакции авторизованного пользователя
 // @Tags         	transactions
 // @Accept       	json
 // @Produce      	json
@@ -451,17 +457,17 @@ func (s *Server) updateTransaction(c *gin.Context) {
 // @Failure      	500  	{object}  	ErrorResponse 	"Ошибка при удалениии транзакции"
 // @Router       	/transactions/{id} [delete]
 func (s *Server) deleteTransaction(c *gin.Context) {
-	id := c.GetUint("jwt")
+	userID := c.GetUint("jwt")
 
 	paramID := c.Param("id")
 	transactionID, err := strconv.ParseUint(paramID, 10, 64)
 	if err != nil {
 		log.Println(err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверно указано ID транзакции"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Неверно указано ID транзакции"})
 		return
 	}
 
-	success, err := s.transactionService.DeleteTransaction(id, uint(transactionID))
+	success, err := s.transactionService.DeleteTransaction(userID, uint(transactionID))
 	if err != nil {
 		log.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при удалении транзакции"})
@@ -518,9 +524,9 @@ func (s *Server) transactions(c *gin.Context) {
 		to = &parsedTo
 	}
 
-	id := c.GetUint("jwt")
+	userID := c.GetUint("jwt")
 
-	result, err := s.transactionService.Transactions(id, data.Limit, data.Page, from, to, data.Type, data.Categories)
+	result, err := s.transactionService.Transactions(userID, data.Limit, data.Page, from, to, data.Type, data.Categories)
 
 	if err != nil {
 		log.Println(err)
@@ -554,9 +560,9 @@ func (s *Server) systemCategories(c *gin.Context) {
 // @Router       	/user-categories [get]
 // @Ignore
 func (s *Server) userCategories(c *gin.Context) {
-	id := c.GetUint("jwt")
+	userID := c.GetUint("jwt")
 
-	result, err := s.categoryService.UserCategories(id)
+	result, err := s.categoryService.UserCategories(userID)
 
 	if err != nil {
 		log.Println(err)
@@ -576,9 +582,9 @@ func (s *Server) userCategories(c *gin.Context) {
 // @Failure      	500  {object}  ErrorResponse 			"Ошибка при получении категории"
 // @Router       	/categories [get]
 func (s *Server) categories(c *gin.Context) {
-	id := c.GetUint("jwt")
+	userID := c.GetUint("jwt")
 
-	result, err := s.categoryService.Categories(id)
+	result, err := s.categoryService.Categories(userID)
 
 	if err != nil {
 		log.Println(err)
@@ -598,6 +604,7 @@ func (s *Server) categories(c *gin.Context) {
 // @Success      	200  {object}  MessageResponse 	"Успешно"
 // @Failure      	400  {object}  ErrorResponse 	"Неверно заполнены поля"
 // @Failure      	401  {object}  ErrorResponse 	"Ошибка авторизации"
+// @Failure      	409  {object}  ErrorResponse 	"Бюджет с данной категорией уже существует"
 // @Failure      	500  {object}  ErrorResponse 	"Ошибка при создании бюджета"
 // @Router       	/budgets [post]
 func (s *Server) addBudget(c *gin.Context) {
@@ -608,15 +615,100 @@ func (s *Server) addBudget(c *gin.Context) {
 		return
 	}
 
-	id := c.GetUint("jwt")
+	userID := c.GetUint("jwt")
 
-	if err := s.budgetService.AddBudget(id, data.CategoryID, data.Limit); err != nil {
+	if err := s.budgetService.AddBudget(userID, data.CategoryID, data.Limit); err != nil {
 		log.Println(err)
 		if errors.Is(err, apperr.NotUnique) {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Бюджет с данной категорией уже существует"})
+			c.JSON(http.StatusConflict, gin.H{"error": "Бюджет с данной категорией уже существует"})
 		} else {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при создании бюджета"})
 		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Успешно"})
+}
+
+// @Summary 		Обновление бюджета
+// @Description  	Обновление лимита бюджета авторизированного пользователя
+// @Tags         	budgets
+// @Accept       	json
+// @Produce      	json
+// @Param			id		path 		int 				true	"ID бюджета"
+// @Param        	input 	body 		UpdateBudgetFormat 	true	"Новый лимит"
+// @Success      	200  {object}  MessageResponse 	"Успешно"
+// @Failure      	400  {object}  ErrorResponse 	"Неверно указано ID бюджета"
+// @Failure      	400  {object}  ErrorResponse 	"Неверно заполнен новый лимит"
+// @Failure      	401  {object}  ErrorResponse 	"Ошибка авторизации"
+// @Failure      	404  {object}  ErrorResponse 	"Данный бюджет отсутствует"
+// @Failure      	500  {object}  ErrorResponse 	"Ошибка при создании бюджета"
+// @Router       	/budgets/{id} [patch]
+func (s *Server) updateBudget(c *gin.Context) {
+	paramID := c.Param("id")
+	budgetID, err := strconv.ParseUint(paramID, 10, 64)
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверно указано ID бюджета"})
+		return
+	}
+
+	var data UpdateBudgetFormat
+	if err := c.ShouldBindJSON(&data); err != nil {
+		log.Println(err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверно заполнен новый лимит"})
+		return
+	}
+
+	userID := c.GetUint("jwt")
+
+	success, err := s.budgetService.UpdateBudget(userID, uint(budgetID), data.Limit)
+
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при обновлении бюджета"})
+		return
+	}
+
+	if !success {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Данный бюджет отсутствует"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Успешно"})
+}
+
+// @Summary 		Удаление бюджета
+// @Description  	Удаление бюджета авторизованного пользователя
+// @Tags         	budgets
+// @Produce      	json
+// @Param			id		path 		int 	true 	"ID бюджета"
+// @Success      	200  	{object}  	MessageResponse "Успешно"
+// @Failure      	400  	{object}  	ErrorResponse 	"Неверно указано ID бюджета"
+// @Failure      	401  	{object}  	ErrorResponse 	"Ошибка авторизации"
+// @Failure      	404  	{object}  	ErrorResponse 	"Данный бюджет отсутствует"
+// @Failure      	500  	{object}  	ErrorResponse 	"Ошибка при удалениии бюджета"
+// @Router       	/budgets/{id} [delete]
+func (s *Server) deleteBudget(c *gin.Context) {
+	paramID := c.Param("id")
+	budgetID, err := strconv.ParseUint(paramID, 10, 64)
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusNotFound, gin.H{"error": "Неверно указано ID бюджета"})
+		return
+	}
+
+	userID := c.GetUint("jwt")
+
+	success, err := s.budgetService.DeleteBudget(userID, uint(budgetID))
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при удалении бюджета"})
+		return
+	}
+
+	if !success {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Данный бюджет отсутствует"})
 		return
 	}
 
@@ -649,9 +741,9 @@ func (s *Server) budgets(c *gin.Context) {
 		return
 	}
 
-	id := c.GetUint("jwt")
+	userID := c.GetUint("jwt")
 
-	result, err := s.budgetService.Budgets(id, parsedDate)
+	result, err := s.budgetService.Budgets(userID, parsedDate)
 
 	if err != nil {
 		log.Println(err)
