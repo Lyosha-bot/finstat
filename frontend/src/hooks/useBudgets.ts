@@ -1,5 +1,13 @@
 import { useState, useEffect } from 'react'
-import { getBudgets, createBudget, type Budget, type CreateBudgetPayload } from '../api/budgets'
+import {
+  getBudgets,
+  createBudget,
+  deleteBudget,
+  updateBudget,
+  type Budget,
+  type CreateBudgetPayload,
+  type UpdateBudgetPayload,
+} from '../api/budgets'
 
 export function useBudgets(date: string) {
   const [budgets, setBudgets] = useState<Budget[]>([])
@@ -33,5 +41,24 @@ export function useBudgets(date: string) {
     await fetchBudgets()
   }
 
-  return { budgets, loading, error, addBudget, refetch: fetchBudgets }
+  const removeBudget = async (id: number) => {
+    await deleteBudget(id)
+    await fetchBudgets()
+  }
+
+    const editBudget = async (id: number, payload: UpdateBudgetPayload) => {
+    await updateBudget(id, payload)
+    await fetchBudgets()
+  }
+
+    return {
+    budgets,
+    loading,
+    error,
+    addBudget,
+    removeBudget,
+    editBudget,
+    refetch: fetchBudgets,
+  }
+
 }
