@@ -84,14 +84,14 @@ type IsUserValidFormat struct {
 
 type AddTransactionFormat struct {
 	Amount      decimal.Decimal `json:"amount" binding:"required"`
-	Category    uint            `json:"category" binding:"required,numeric"`
+	CategoryID  uint            `json:"category_id" binding:"required,numeric"`
 	Description string          `json:"description" binding:"omitempty"`
 	Date        string          `json:"date" binding:"required"`
 }
 
 type UpdateTransactionFormat struct {
 	Amount      decimal.Decimal `json:"amount" binding:"required"`
-	CategoryID  uint            `json:"category" binding:"required,numeric"`
+	CategoryID  uint            `json:"category_id" binding:"required,numeric"`
 	Description string          `json:"description" binding:"omitempty"`
 	Date        string          `json:"date" binding:"required"`
 }
@@ -109,6 +109,10 @@ type TransactionsFilter struct {
 	Categories CategoriesList `form:"categories,parser=encoding.TextUnmarshaler" binding:"omitempty"`
 }
 
+type CategoryFormat struct {
+	Name string `json:"name" binding:"required"`
+}
+
 type AddBudgetFormat struct {
 	CategoryID uint            `json:"category_id" binding:"required"`
 	Limit      decimal.Decimal `json:"limit" binding:"required"`
@@ -122,8 +126,8 @@ type BudgetsFilter struct {
 	Date string `form:"date" binding:"required,datetime=2006-01-02"`
 }
 
-type MessageResponse struct {
-	Message string `json:"message"`
+type IDResponse struct {
+	ID uint `json:"id"`
 }
 
 type ErrorResponse struct {
@@ -173,6 +177,9 @@ func (s *Server) Start(port string) {
 	categories := api.Group("/categories")
 	categories.Use(s.middleware)
 	categories.GET("", s.categories)
+	categories.POST("", s.addCategory)
+	categories.PATCH("/:id", s.updateCategory)
+	categories.DELETE("/:id", s.deleteCategory)
 
 	budgets := api.Group("/budgets")
 	budgets.Use(s.middleware)
@@ -244,7 +251,7 @@ func (s *Server) isValidUser(data UserFormat) (bool, string) {
 // @Accept       	json
 // @Produce      	json
 // @Param        	input body UserFormat true 	"Логин и пароль для регистрации"
-// @Success      	201  {object}  MessageResponse 	"Успешная регистрация"
+// @Success      	201 							"Успешная регистрация"
 // @Failure      	400  {object}  ErrorResponse 	"Неверно заполнены поля"
 // @Failure      	409  {object}  ErrorResponse 	"Данное имя пользователя уже используется"
 // @Failure      	500  {object}  ErrorResponse 	"Ошибка регистрации пользователя"
@@ -272,16 +279,16 @@ func (s *Server) register(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "Успешная регистрация"})
+	c.JSON(http.StatusCreated, nil)
 }
 
 // @Summary 		Проверка возможности регистрации пользователя с указанными данными
-// @Description  	Проверяет данны по внутренним параметрам, а также уникальности имени пользователя
+// @Description  	Проверяет данные по внутренним параметрам, а также уникальности имени пользователя
 // @Tags         	auth
 // @Accept       	json
 // @Produce      	json
 // @Param        	input body IsUserValidFormat true 	"Логин и пароль для регистрации"
-// @Success      	200  {object}  MessageResponse 	"Регистрация возможна"
+// @Success      	200								"Регистрация возможна"
 // @Failure      	400  {object}  ErrorResponse 	"Неверно заполнены поля"
 // @Failure      	400  {object}  ErrorResponse 	"Имя пользователя и пароль должны состоять только из латинских букв, цифр и особых символов"
 // @Failure      	400  {object}  ErrorResponse 	"Имя пользователя должно быть минимум из 4 символов"
@@ -311,7 +318,7 @@ func (s *Server) isValid(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Регистрация возможна"})
+	c.JSON(http.StatusOK, nil)
 }
 
 // @Summary 		Авторизация пользователя
@@ -320,7 +327,7 @@ func (s *Server) isValid(c *gin.Context) {
 // @Accept       	json
 // @Produce      	json
 // @Param        	input body UserFormat true 		"Логин и пароль для авторизации"
-// @Success      	200  {object}  MessageResponse 	"Успешная авторизация"
+// @Success      	200								"Успешная авторизация"
 // @Failure      	400  {object}  ErrorResponse 	"Неверно заполнены поля"
 // @Failure      	500  {object}  ErrorResponse 	"Ошибка авторизации пользователя"
 // @Router       	/auth/login [post]
@@ -349,7 +356,7 @@ func (s *Server) login(c *gin.Context) {
 		true,
 	)
 
-	c.JSON(http.StatusOK, gin.H{"message": "Успешная авторизация"})
+	c.JSON(http.StatusOK, nil)
 }
 
 // @Summary 		Создание транзакции
@@ -358,7 +365,7 @@ func (s *Server) login(c *gin.Context) {
 // @Accept       	json
 // @Produce      	json
 // @Param        	input body AddTransactionFormat true "Информация о транзакции"
-// @Success      	200  {object}  MessageResponse 	"Успешно"
+// @Success      	200								"Успешное создание транзакции"
 // @Failure      	400  {object}  ErrorResponse 	"Неверно заполнены поля"
 // @Failure      	401  {object}  ErrorResponse 	"Ошибка авторизации"
 // @Failure      	500  {object}  ErrorResponse 	"Ошибка при создании транзакции"
@@ -380,14 +387,14 @@ func (s *Server) addTransaction(c *gin.Context) {
 
 	userID := c.GetUint("jwt")
 
-	_, err = s.transactionService.AddTransaction(userID, data.Amount, data.Category, data.Description, date)
+	_, err = s.transactionService.AddTransaction(userID, data.Amount, data.CategoryID, data.Description, date)
 	if err != nil {
 		log.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при создании транзакции"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Успешно"})
+	c.JSON(http.StatusOK, nil)
 }
 
 // @Summary 		Обновление информации о транзакции
@@ -397,7 +404,7 @@ func (s *Server) addTransaction(c *gin.Context) {
 // @Produce      	json
 // @Param			id 		path 		int 					true 	"ID транзакции"
 // @Param        	input 	body 		UpdateTransactionFormat true 	"Новая информация о транзакции"
-// @Success      	200  	{object}  	MessageResponse "Успешно"
+// @Success      	200									"Успешное обновление транзакции"
 // @Failure      	400  	{object}  	ErrorResponse 	"Неверно заполнены поля"
 // @Failure      	400  	{object}  	ErrorResponse 	"Неверно указано ID транзакции"
 // @Failure      	401  	{object}  	ErrorResponse 	"Ошибка авторизации"
@@ -441,16 +448,16 @@ func (s *Server) updateTransaction(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Успешно"})
+	c.JSON(http.StatusOK, nil)
 }
 
 // @Summary 		Удаление транзакции
-// @Description  	Удаление транзакции авторизованного пользователя
+// @Description  	Удаляет транзакцию авторизованного пользователя
 // @Tags         	transactions
 // @Accept       	json
 // @Produce      	json
 // @Param			id		path 		int 	true 	"ID транзакции"
-// @Success      	200  	{object}  	MessageResponse "Успешно"
+// @Success      	200									"Успешное удаление транзакции"
 // @Failure      	400  	{object}  	ErrorResponse 	"Неверно указано ID транзакции"
 // @Failure      	401  	{object}  	ErrorResponse 	"Ошибка авторизации"
 // @Failure      	404  	{object}  	ErrorResponse 	"Данная транзакция отсутствует"
@@ -479,7 +486,7 @@ func (s *Server) deleteTransaction(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Успешно"})
+	c.JSON(http.StatusOK, nil)
 }
 
 // @Summary 		Получение списка транзакций
@@ -537,40 +544,130 @@ func (s *Server) transactions(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"result": result})
 }
 
-// @Summary 		Получение списка системных категорий
-// @Description  	Возвращает список системных категорий
+// @Summary 		Создание пользовательской категории
+// @Description  	Создает пользовательскую категорию и возвращает ее ID
 // @Tags         	categories
+// @Accept       	json
 // @Produce      	json
-// @Success      	200  {object}  CategoriesResponse 		"Успешное получение системных категорий"
-// @Failure      	401  {object}  ErrorResponse 			"Ошибка авторизации"
-// @Failure      	500  {object}  ErrorResponse 			"Ошибка при получении категории"
-// @Router       	/system-categories [get]
-// @Ignore
-func (s *Server) systemCategories(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"result": s.categoryService.SystemCategories()})
-}
-
-// @Summary 		Получение списка пользовательских категорий
-// @Description  	Возвращает список пользовательских категорий
-// @Tags         	categories
-// @Produce      	json
-// @Success      	200  {object}  CategoriesResponse 		"Успешное получение пользовательских категорий"
-// @Failure      	401  {object}  ErrorResponse 			"Ошибка авторизации"
-// @Failure      	500  {object}  ErrorResponse 			"Ошибка при получении категории"
-// @Router       	/user-categories [get]
-// @Ignore
-func (s *Server) userCategories(c *gin.Context) {
-	userID := c.GetUint("jwt")
-
-	result, err := s.categoryService.UserCategories(userID)
-
-	if err != nil {
+// @Param        	input body CategoryFormat true "Имя категории (Больше 2 символов)"
+// @Success      	200								"Успешное создание пользовательской категории"
+// @Failure      	400  {object}  ErrorResponse 	"Неверно заполнено имя категории"
+// @Failure      	401  {object}  ErrorResponse 	"Ошибка авторизации"
+// @Failure      	409  {object}  ErrorResponse 	"Категория с таким именем уже есть"
+// @Failure      	500  {object}  ErrorResponse 	"Ошибка при создании категории"
+// @Router       	/categories [post]
+func (s *Server) addCategory(c *gin.Context) {
+	var data CategoryFormat
+	if err := c.ShouldBindJSON(&data); err != nil {
 		log.Println(err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при получении категорий"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверно заполнено имя категории"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"result": result})
+	if len(data.Name) <= 2 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Имя категории должно быть больше 2 символов"})
+		return
+	}
+
+	userID := c.GetUint("jwt")
+
+	id, err := s.categoryService.AddCategory(userID, data.Name)
+	if err != nil {
+		log.Println(err)
+		if errors.Is(err, apperr.NotUnique) {
+			c.JSON(http.StatusConflict, gin.H{"error": "Категория с таким именем уже есть"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при создании категории"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"id": id})
+}
+
+// @Summary 		Обновление категории
+// @Description  	Обновляет название категории авторизированного пользователя
+// @Tags         	categories
+// @Accept       	json
+// @Produce      	json
+// @Param			id		path 		int 				true	"ID категории"
+// @Param        	input 	body 		CategoryFormat 		true	"Новое имя категории"
+// @Success      	200 							"Успешное обновление категории"
+// @Failure      	400  {object}  ErrorResponse 	"Неверно указано ID бюджета"
+// @Failure      	400  {object}  ErrorResponse 	"Неверно заполнен новый лимит"
+// @Failure      	401  {object}  ErrorResponse 	"Ошибка авторизации"
+// @Failure      	404  {object}  ErrorResponse 	"Данный бюджет отсутствует"
+// @Failure      	500  {object}  ErrorResponse 	"Ошибка при создании бюджета"
+// @Router       	/categories/{id} [patch]
+func (s *Server) updateCategory(c *gin.Context) {
+	paramID := c.Param("id")
+	categoryID, err := strconv.ParseUint(paramID, 10, 64)
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверно указано ID категории"})
+		return
+	}
+
+	var data CategoryFormat
+	if err := c.ShouldBindJSON(&data); err != nil {
+		log.Println(err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверно заполнено новое имя категории"})
+		return
+	}
+
+	userID := c.GetUint("jwt")
+
+	success, err := s.categoryService.UpdateCategory(userID, uint(categoryID), data.Name)
+
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при обновлении категории"})
+		return
+	}
+
+	if !success {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Данная категория отсутствует"})
+		return
+	}
+
+	c.JSON(http.StatusOK, nil)
+}
+
+// @Summary 		Удаление категории
+// @Description  	Удаляет категорию авторизованного пользователя
+// @Tags         	categories
+// @Produce      	json
+// @Param			id		path 		int 	true 	"ID категории"
+// @Success      	200									"Успешное удаление категории"
+// @Failure      	400  	{object}  	ErrorResponse 	"Неверно указано ID категории"
+// @Failure      	401  	{object}  	ErrorResponse 	"Ошибка авторизации"
+// @Failure      	404  	{object}  	ErrorResponse 	"Данная категория отсутствует"
+// @Failure      	500  	{object}  	ErrorResponse 	"Ошибка при удалениии категории"
+// @Router       	/categories/{id} [delete]
+func (s *Server) deleteCategory(c *gin.Context) {
+	paramID := c.Param("id")
+	budgetID, err := strconv.ParseUint(paramID, 10, 64)
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusNotFound, gin.H{"error": "Неверно указано ID категории"})
+		return
+	}
+
+	userID := c.GetUint("jwt")
+
+	success, err := s.categoryService.DeleteCategory(userID, uint(budgetID))
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при удалении категории"})
+		return
+	}
+
+	if !success {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Данная категория отсутствует"})
+		return
+	}
+
+	c.JSON(http.StatusOK, nil)
 }
 
 // @Summary 		Получение списка категорий
@@ -601,7 +698,7 @@ func (s *Server) categories(c *gin.Context) {
 // @Accept       	json
 // @Produce      	json
 // @Param        	input body AddBudgetFormat true "Категория и лимит"
-// @Success      	200  {object}  MessageResponse 	"Успешно"
+// @Success      	200								"Успешное создание бюджета"
 // @Failure      	400  {object}  ErrorResponse 	"Неверно заполнены поля"
 // @Failure      	401  {object}  ErrorResponse 	"Ошибка авторизации"
 // @Failure      	409  {object}  ErrorResponse 	"Бюджет с данной категорией уже существует"
@@ -627,17 +724,17 @@ func (s *Server) addBudget(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Успешно"})
+	c.JSON(http.StatusOK, nil)
 }
 
 // @Summary 		Обновление бюджета
-// @Description  	Обновление лимита бюджета авторизированного пользователя
+// @Description  	Обновляет лимит бюджета авторизированного пользователя
 // @Tags         	budgets
 // @Accept       	json
 // @Produce      	json
 // @Param			id		path 		int 				true	"ID бюджета"
 // @Param        	input 	body 		UpdateBudgetFormat 	true	"Новый лимит"
-// @Success      	200  {object}  MessageResponse 	"Успешно"
+// @Success      	200 							"Успешное обновление бюджета"
 // @Failure      	400  {object}  ErrorResponse 	"Неверно указано ID бюджета"
 // @Failure      	400  {object}  ErrorResponse 	"Неверно заполнен новый лимит"
 // @Failure      	401  {object}  ErrorResponse 	"Ошибка авторизации"
@@ -675,15 +772,15 @@ func (s *Server) updateBudget(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Успешно"})
+	c.JSON(http.StatusOK, nil)
 }
 
 // @Summary 		Удаление бюджета
-// @Description  	Удаление бюджета авторизованного пользователя
+// @Description  	Удаляет бюджет авторизованного пользователя
 // @Tags         	budgets
 // @Produce      	json
 // @Param			id		path 		int 	true 	"ID бюджета"
-// @Success      	200  	{object}  	MessageResponse "Успешно"
+// @Success      	200									"Успешное удаление бюджета"
 // @Failure      	400  	{object}  	ErrorResponse 	"Неверно указано ID бюджета"
 // @Failure      	401  	{object}  	ErrorResponse 	"Ошибка авторизации"
 // @Failure      	404  	{object}  	ErrorResponse 	"Данный бюджет отсутствует"
@@ -712,7 +809,7 @@ func (s *Server) deleteBudget(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Успешно"})
+	c.JSON(http.StatusOK, nil)
 }
 
 // @Summary 		Получение информации по бюджетам

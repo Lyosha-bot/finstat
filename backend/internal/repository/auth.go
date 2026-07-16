@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"finstat/internal/apperr"
-	ewrap "finstat/internal/lib"
+	"finstat/internal/lib"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -38,7 +38,7 @@ func (c *Client) InsertUser(username, password string) error {
 
 	conn, err := c.pool.Acquire(ctx)
 	if err != nil {
-		return ewrap.Wrap("Couldn't acquire connection", err)
+		return lib.Ewrap("Couldn't acquire connection", err)
 	}
 	defer conn.Release()
 
@@ -53,7 +53,7 @@ func (c *Client) InsertUser(username, password string) error {
 			}
 		}
 
-		return ewrap.Wrap("Couldn't insert user", err)
+		return lib.Ewrap("Couldn't insert user", err)
 	}
 
 	return nil
@@ -64,7 +64,7 @@ func (c *Client) User(username string) (*User, error) {
 
 	conn, err := c.pool.Acquire(ctx)
 	if err != nil {
-		return nil, ewrap.Wrap("Couldn't acquire connection", err)
+		return nil, lib.Ewrap("Couldn't acquire connection", err)
 	}
 	defer conn.Release()
 
@@ -76,7 +76,7 @@ func (c *Client) User(username string) (*User, error) {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, apperr.NoRow
 		}
-		return nil, ewrap.Wrap("Couldn't get user data", err)
+		return nil, lib.Ewrap("Couldn't get user data", err)
 	}
 
 	return &result, nil

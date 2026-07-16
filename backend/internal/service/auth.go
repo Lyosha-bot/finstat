@@ -1,7 +1,7 @@
 package service
 
 import (
-	ewrap "finstat/internal/lib"
+	"finstat/internal/lib"
 	"finstat/internal/repository"
 	"finstat/internal/token"
 
@@ -30,11 +30,11 @@ func NewAuthService(repo AuthRepo, jwtSecret []byte) *AuthService {
 func (s *AuthService) Register(username, password string) error {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return ewrap.Wrap("Couldn't generate hashed password", err)
+		return lib.Ewrap("Couldn't generate hashed password", err)
 	}
 
 	if err := s.repo.InsertUser(username, string(hashedPassword)); err != nil {
-		return ewrap.Wrap("Couldn't insert new user", err)
+		return lib.Ewrap("Couldn't insert new user", err)
 	}
 
 	return nil
@@ -43,16 +43,16 @@ func (s *AuthService) Register(username, password string) error {
 func (s *AuthService) Login(username, password string) (string, error) {
 	user, err := s.repo.User(username)
 	if err != nil {
-		return "", ewrap.Wrap("Couldn't get user", err)
+		return "", lib.Ewrap("Couldn't get user", err)
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.HashedPassword), []byte(password)); err != nil {
-		return "", ewrap.Wrap("Passwords mismatched", err)
+		return "", lib.Ewrap("Passwords mismatched", err)
 	}
 
 	newToken, err := token.AddToken(user.ID, s.jwtSecret, TOKEN_LIFE_TIME)
 	if err != nil {
-		return "", ewrap.Wrap("Couldn't generate new token", err)
+		return "", lib.Ewrap("Couldn't generate new token", err)
 	}
 
 	return newToken, nil
@@ -61,7 +61,7 @@ func (s *AuthService) Login(username, password string) (string, error) {
 func (s *AuthService) ID(jwtToken string) (uint, error) {
 	id, err := token.ID(jwtToken, s.jwtSecret)
 	if err != nil {
-		return 0, ewrap.Wrap("Invalid token", err)
+		return 0, lib.Ewrap("Invalid token", err)
 	}
 
 	return id, nil

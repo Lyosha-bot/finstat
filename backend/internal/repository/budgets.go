@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"finstat/internal/apperr"
-	ewrap "finstat/internal/lib"
+	"finstat/internal/lib"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -41,6 +41,7 @@ const (
 			AND (b.category_id IS NULL OR t.category_id = b.category_id) 
 			AND t.date >= $2 
 			AND t.date < $3
+			AND t.value < 0
 		WHERE b.user_id = $1
 		GROUP BY b.id, c.name;
 	`
@@ -58,7 +59,7 @@ func (c *Client) AddBudget(userID, categoryID uint, limit decimal.Decimal) error
 
 	conn, err := c.pool.Acquire(ctx)
 	if err != nil {
-		return ewrap.Wrap("Couldn't acquire connection", err)
+		return lib.Ewrap("Couldn't acquire connection", err)
 	}
 	defer conn.Release()
 
@@ -73,7 +74,7 @@ func (c *Client) AddBudget(userID, categoryID uint, limit decimal.Decimal) error
 			}
 		}
 
-		return ewrap.Wrap("Couldn't add new budget", err)
+		return lib.Ewrap("Couldn't add new budget", err)
 	}
 
 	return nil
@@ -84,14 +85,14 @@ func (c *Client) UpdateBudget(userID, budgetID uint, newLimit decimal.Decimal) (
 
 	conn, err := c.pool.Acquire(ctx)
 	if err != nil {
-		return false, ewrap.Wrap("Couldn't acquire connection", err)
+		return false, lib.Ewrap("Couldn't acquire connection", err)
 	}
 	defer conn.Release()
 
 	cmdTag, err := conn.Exec(ctx, UPDATE_BUDGET_QUERY, userID, budgetID, newLimit)
 
 	if err != nil {
-		return false, ewrap.Wrap("Couldn't update budget", err)
+		return false, lib.Ewrap("Couldn't update budget", err)
 	}
 
 	return cmdTag.RowsAffected() != 0, nil
@@ -102,14 +103,14 @@ func (c *Client) DeleteBudget(userID, budgetID uint) (bool, error) {
 
 	conn, err := c.pool.Acquire(ctx)
 	if err != nil {
-		return false, ewrap.Wrap("Couldn't acquire connection", err)
+		return false, lib.Ewrap("Couldn't acquire connection", err)
 	}
 	defer conn.Release()
 
 	cmdTag, err := conn.Exec(ctx, DELETE_BUDGET_QUERY, userID, budgetID)
 
 	if err != nil {
-		return false, ewrap.Wrap("Couldn't delete budget", err)
+		return false, lib.Ewrap("Couldn't delete budget", err)
 	}
 
 	return cmdTag.RowsAffected() != 0, nil
@@ -120,27 +121,27 @@ func (c *Client) Budgets(userID uint, from, to time.Time) ([]Budget, error) {
 
 	conn, err := c.pool.Acquire(ctx)
 	if err != nil {
-		return nil, ewrap.Wrap("Couldn't acquire connection", err)
+		return nil, lib.Ewrap("Couldn't acquire connection", err)
 	}
 	defer conn.Release()
 
 	rows, err := conn.Query(ctx, BUDGETS_QUERY, userID, from, to)
 	if err != nil {
-		return nil, ewrap.Wrap("Couldn't get budgets data", err)
+		return nil, lib.Ewrap("Couldn't get budgets data", err)
 	}
 
 	result := make([]Budget, 0, 5)
 	for rows.Next() {
 		var val Budget
 		if err = rows.Scan(&val.ID, &val.Name, &val.LimitValue, &val.CurrentValue); err != nil {
-			return nil, ewrap.Wrap("Couldn't scan budget", err)
+			return nil, lib.Ewrap("Couldn't scan budget", err)
 		}
 
 		result = append(result, val)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, ewrap.Wrap("Couldn't iterate budgets", err)
+		return nil, lib.Ewrap("Couldn't iterate budgets", err)
 	}
 
 	return result, nil
