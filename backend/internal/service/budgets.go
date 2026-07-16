@@ -11,8 +11,8 @@ type Budget = repository.Budget
 
 type BudgetRepo interface {
 	AddBudget(userID, categoryID uint, limit decimal.Decimal) error
-	UpdateBudget(userID, categoryID uint, newLimit decimal.Decimal) (bool, error)
-	DeleteBudget(userID, categoryID uint) (bool, error)
+	UpdateBudget(userID, budgetID uint, newLimit decimal.Decimal) (bool, error)
+	DeleteBudget(userID, budgetID uint) (bool, error)
 	Budgets(userID uint, from, to time.Time) ([]Budget, error)
 }
 
@@ -30,12 +30,12 @@ func (s *BudgetService) AddBudget(userID, categoryID uint, limit decimal.Decimal
 	return s.repo.AddBudget(userID, categoryID, limit)
 }
 
-func (s *BudgetService) UpdateBudget(userID, categoryID uint, newLimit decimal.Decimal) (bool, error) {
-	return s.repo.UpdateBudget(userID, categoryID, newLimit)
+func (s *BudgetService) UpdateBudget(userID, budgetID uint, newLimit decimal.Decimal) (bool, error) {
+	return s.repo.UpdateBudget(userID, budgetID, newLimit)
 }
 
-func (s *BudgetService) DeleteBudget(userID, categoryID uint) (bool, error) {
-	return s.repo.DeleteBudget(userID, categoryID)
+func (s *BudgetService) DeleteBudget(userID, budgetID uint) (bool, error) {
+	return s.repo.DeleteBudget(userID, budgetID)
 }
 
 func (s *BudgetService) Budgets(userID uint, date time.Time) ([]Budget, error) {
