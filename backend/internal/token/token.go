@@ -1,10 +1,9 @@
-// TODO: Настроить context
-// TODO: Добавить интерфейсы
-
 package token
 
 import (
 	"errors"
+	"fmt"
+	"log"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -14,18 +13,19 @@ const (
 	TOKEN_ISSUER = "finstat"
 )
 
-type customClaims struct {
-	ID uint `json:"user_id"`
+type CustomClaims struct {
+	UserID uint   `json:"user_id,omitempty"`
+	UUID   string `json:"uuid,omitempty"`
 	jwt.RegisteredClaims
 }
 
-func AddToken(user_id uint, jwt_secret []byte, lifetime uint) (string, error) {
-	claims := customClaims{
-		ID: user_id,
+func NewAccessToken(user_id uint, jwt_secret []byte, lifetime uint) (string, error) {
+	claims := CustomClaims{
+		UserID: user_id,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    TOKEN_ISSUER,
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * time.Duration(lifetime))),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Second * time.Duration(lifetime))),
 		},
 	}
 
@@ -39,19 +39,45 @@ func AddToken(user_id uint, jwt_secret []byte, lifetime uint) (string, error) {
 	return tokenString, nil
 }
 
-func ID(jwt_token string, jwt_secret []byte) (uint, error) {
-	var result customClaims
+func NewRefreshToken(uuid string, jwt_secret []byte, lifetime uint) (string, error) {
+	claims := CustomClaims{
+		UUID: uuid,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    TOKEN_ISSUER,
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Second * time.Duration(lifetime))),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	tokenString, err := token.SignedString(jwt_secret)
+	if err != nil {
+		return "", err
+	}
+
+	return tokenString, nil
+}
+
+func Claims(jwt_token string, jwt_secret []byte) (*CustomClaims, error) {
+	var result CustomClaims
 	token, err := jwt.ParseWithClaims(jwt_token, &result, func(token *jwt.Token) (any, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
 		return jwt_secret, nil
 	})
 
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	if !token.Valid {
-		return 0, errors.New("Token is dead")
+		return nil, errors.New("Token is dead")
 	}
 
-	return result.ID, nil
+	log.Println(result.UserID)
+	log.Println(result.UUID)
+
+	return &result, nil
 }

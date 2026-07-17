@@ -26,7 +26,7 @@ func main() {
 		log.Fatalln(lib.Ewrap("Couldn't create repo client", err))
 	}
 
-	authService := service.NewAuthService(repo, []byte(os.Getenv("JWT_SECRET")))
+	authService := service.NewAuthService(repo, []byte(os.Getenv("JWT_ACCESS_SECRET")), []byte(os.Getenv("JWT_REFRESH_SECRET")))
 
 	transactionsService := service.NewTransactionService(repo)
 

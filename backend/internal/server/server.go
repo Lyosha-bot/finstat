@@ -21,8 +21,9 @@ import (
 )
 
 const (
-	TOKEN_LIFE_TIME = 20 // В минутах
-	JWT_COOKIE_NAME = "jwt"
+	JWT_COOKIE_NAME = "refresh_jwt"
+	USER_ID_KEY     = "user_id"
+	REFRESH_PATH    = "/api/auth/refresh"
 )
 
 var (
@@ -36,6 +37,11 @@ var (
 
 // @host localhost:8080
 // @BasePath /api
+
+// @securityDefinitions.apikey Auth
+// @in                         header
+// @name                       Authorization
+// @description                Укажите Access-токен
 
 type CategoriesList []uint
 
@@ -134,6 +140,10 @@ type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
+type StringResponse struct {
+	Result string `json:"result"`
+}
+
 type TransactionsResponse struct {
 	Result []service.Transaction `json:"result"`
 }
@@ -166,6 +176,7 @@ func (s *Server) Start(port string) {
 	auth.POST("/register", s.register)
 	auth.POST("/register/is-valid", s.isValid)
 	auth.POST("/login", s.login)
+	auth.POST("/refresh", s.refresh)
 
 	transactions := api.Group("/transactions")
 	transactions.Use(s.middleware)
@@ -192,23 +203,21 @@ func (s *Server) Start(port string) {
 }
 
 func (s *Server) middleware(c *gin.Context) {
-	cookie, err := c.Cookie(JWT_COOKIE_NAME)
-	if err != nil {
-		log.Println(err)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Ошибка авторизации"})
-		c.Abort()
+	token := c.GetHeader("Authorization")
+	if token == "" {
+		log.Println("Отсутствует header: Authorization")
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Отсутствует header: Authorization"})
 		return
 	}
 
-	id, err := s.authService.ID(cookie)
+	id, err := s.authService.ID(token)
 	if err != nil {
 		log.Println(err)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Ошибка авторизации"})
-		c.Abort()
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Ошибка авторизации"})
 		return
 	}
 
-	c.Set("jwt", id)
+	c.Set(USER_ID_KEY, id)
 
 	c.Next()
 }
@@ -243,43 +252,6 @@ func (s *Server) isValidUser(data UserFormat) (bool, string) {
 	}
 
 	return true, ""
-}
-
-// @Summary 		Регистрация нового пользователя
-// @Description  	Создает аккаунт в системе.
-// @Tags         	auth
-// @Accept       	json
-// @Produce      	json
-// @Param        	input body UserFormat true 	"Логин и пароль для регистрации"
-// @Success      	201 							"Успешная регистрация"
-// @Failure      	400  {object}  ErrorResponse 	"Неверно заполнены поля"
-// @Failure      	409  {object}  ErrorResponse 	"Данное имя пользователя уже используется"
-// @Failure      	500  {object}  ErrorResponse 	"Ошибка регистрации пользователя"
-// @Router       	/auth/register [post]
-func (s *Server) register(c *gin.Context) {
-	var data UserFormat
-	if err := c.ShouldBindJSON(&data); err != nil {
-		log.Println(err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверно заполнены поля"})
-		return
-	}
-
-	if isValid, errString := s.isValidUser(data); !isValid {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errString})
-		return
-	}
-
-	if err := s.authService.Register(data.Username, data.Password); err != nil {
-		log.Println(err)
-		if errors.Is(err, apperr.NotUnique) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Данное имя пользователя уже используется"})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка регистрации пользователя"})
-		}
-		return
-	}
-
-	c.JSON(http.StatusCreated, nil)
 }
 
 // @Summary 		Проверка возможности регистрации пользователя с указанными данными
@@ -321,6 +293,43 @@ func (s *Server) isValid(c *gin.Context) {
 	c.JSON(http.StatusOK, nil)
 }
 
+// @Summary 		Регистрация нового пользователя
+// @Description  	Создает аккаунт в системе.
+// @Tags         	auth
+// @Accept       	json
+// @Produce      	json
+// @Param        	input body UserFormat true 	"Логин и пароль для регистрации"
+// @Success      	201 							"Успешная регистрация"
+// @Failure      	400  {object}  ErrorResponse 	"Неверно заполнены поля"
+// @Failure      	409  {object}  ErrorResponse 	"Данное имя пользователя уже используется"
+// @Failure      	500  {object}  ErrorResponse 	"Ошибка регистрации пользователя"
+// @Router       	/auth/register [post]
+func (s *Server) register(c *gin.Context) {
+	var data UserFormat
+	if err := c.ShouldBindJSON(&data); err != nil {
+		log.Println(err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверно заполнены поля"})
+		return
+	}
+
+	if isValid, errString := s.isValidUser(data); !isValid {
+		c.JSON(http.StatusBadRequest, gin.H{"error": errString})
+		return
+	}
+
+	if err := s.authService.Register(data.Username, data.Password); err != nil {
+		log.Println(err)
+		if errors.Is(err, apperr.NotUnique) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Данное имя пользователя уже используется"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка регистрации пользователя"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusCreated, nil)
+}
+
 // @Summary 		Авторизация пользователя
 // @Description  	Авторизирует пользователя системы и сохраняет jwt-токена в cookies
 // @Tags         	auth
@@ -339,7 +348,7 @@ func (s *Server) login(c *gin.Context) {
 		return
 	}
 
-	newToken, err := s.authService.Login(data.Username, data.Password)
+	access, refresh, err := s.authService.Login(data.Username, data.Password)
 	if err != nil {
 		log.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка авторизации пользователя"})
@@ -348,15 +357,54 @@ func (s *Server) login(c *gin.Context) {
 
 	c.SetCookie(
 		JWT_COOKIE_NAME,
-		newToken,
-		TOKEN_LIFE_TIME*60,
-		"/",
+		refresh,
+		service.REFRESH_TOKEN_LIFE_TIME*24*60*60,
+		REFRESH_PATH,
 		s.host,
 		true,
 		true,
 	)
 
-	c.JSON(http.StatusOK, nil)
+	c.JSON(http.StatusOK, gin.H{"result": access})
+}
+
+// @Summary 		Обновление токенов
+// @Description  	Обновляет access и refresh токены
+// @Tags         	auth
+// @Accept       	json
+// @Produce      	json
+// @Success      	200								"Успешное обновление токенов"
+// @Failure      	401	{object}	ErrorResponse	"Пользователь не авторизован"
+// @Failure      	500	{object}	ErrorResponse 	"Ошибка обновления токенов"
+// @Router       	/auth/refresh [post]
+func (s *Server) refresh(c *gin.Context) {
+	cookie, err := c.Cookie(JWT_COOKIE_NAME)
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Пользователь не авторизован"})
+		return
+	}
+
+	log.Println("REFRESH COOKIE", cookie)
+
+	access, refresh, err := s.authService.Refresh(cookie)
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка обновления токенов"})
+		return
+	}
+
+	c.SetCookie(
+		JWT_COOKIE_NAME,
+		refresh,
+		service.REFRESH_TOKEN_LIFE_TIME*24*60*60,
+		REFRESH_PATH,
+		s.host,
+		true,
+		true,
+	)
+
+	c.JSON(http.StatusOK, gin.H{"result": access})
 }
 
 // @Summary 		Создание транзакции
@@ -370,6 +418,7 @@ func (s *Server) login(c *gin.Context) {
 // @Failure      	401  {object}  ErrorResponse 	"Ошибка авторизации"
 // @Failure      	500  {object}  ErrorResponse 	"Ошибка при создании транзакции"
 // @Router       	/transactions [post]
+// @Security     	Auth
 func (s *Server) addTransaction(c *gin.Context) {
 	var data AddTransactionFormat
 	if err := c.ShouldBindJSON(&data); err != nil {
@@ -385,7 +434,7 @@ func (s *Server) addTransaction(c *gin.Context) {
 		return
 	}
 
-	userID := c.GetUint("jwt")
+	userID := c.GetUint(USER_ID_KEY)
 
 	_, err = s.transactionService.AddTransaction(userID, data.Amount, data.CategoryID, data.Description, date)
 	if err != nil {
@@ -411,6 +460,7 @@ func (s *Server) addTransaction(c *gin.Context) {
 // @Failure      	404  	{object}  	ErrorResponse 	"Данная транзакция отсутствует"
 // @Failure      	500  	{object}  	ErrorResponse 	"Ошибка при обновлении транзакции"
 // @Router       	/transactions/{id} [patch]
+// @Security     	Auth
 func (s *Server) updateTransaction(c *gin.Context) {
 	paramID := c.Param("id")
 	transactionID, err := strconv.ParseUint(paramID, 10, 64)
@@ -434,7 +484,7 @@ func (s *Server) updateTransaction(c *gin.Context) {
 		return
 	}
 
-	userID := c.GetUint("jwt")
+	userID := c.GetUint(USER_ID_KEY)
 
 	success, err := s.transactionService.UpdateTransaction(userID, uint(transactionID), data.Amount, data.CategoryID, data.Description, date)
 	if err != nil {
@@ -463,8 +513,9 @@ func (s *Server) updateTransaction(c *gin.Context) {
 // @Failure      	404  	{object}  	ErrorResponse 	"Данная транзакция отсутствует"
 // @Failure      	500  	{object}  	ErrorResponse 	"Ошибка при удалениии транзакции"
 // @Router       	/transactions/{id} [delete]
+// @Security     	Auth
 func (s *Server) deleteTransaction(c *gin.Context) {
-	userID := c.GetUint("jwt")
+	userID := c.GetUint(USER_ID_KEY)
 
 	paramID := c.Param("id")
 	transactionID, err := strconv.ParseUint(paramID, 10, 64)
@@ -500,6 +551,7 @@ func (s *Server) deleteTransaction(c *gin.Context) {
 // @Failure      	401  {object}  ErrorResponse 			"Ошибка авторизации"
 // @Failure      	500  {object}  ErrorResponse 			"Ошибка при получении транзакций"
 // @Router       	/transactions [get]
+// @Security     	Auth
 func (s *Server) transactions(c *gin.Context) {
 	var data TransactionsFilter
 	err := c.ShouldBindQuery(&data)
@@ -531,7 +583,7 @@ func (s *Server) transactions(c *gin.Context) {
 		to = &parsedTo
 	}
 
-	userID := c.GetUint("jwt")
+	userID := c.GetUint(USER_ID_KEY)
 
 	result, err := s.transactionService.Transactions(userID, data.Limit, data.Page, from, to, data.Type, data.Categories)
 
@@ -556,6 +608,7 @@ func (s *Server) transactions(c *gin.Context) {
 // @Failure      	409  {object}  ErrorResponse 	"Категория с таким именем уже есть"
 // @Failure      	500  {object}  ErrorResponse 	"Ошибка при создании категории"
 // @Router       	/categories [post]
+// @Security     	Auth
 func (s *Server) addCategory(c *gin.Context) {
 	var data CategoryFormat
 	if err := c.ShouldBindJSON(&data); err != nil {
@@ -569,7 +622,7 @@ func (s *Server) addCategory(c *gin.Context) {
 		return
 	}
 
-	userID := c.GetUint("jwt")
+	userID := c.GetUint(USER_ID_KEY)
 
 	id, err := s.categoryService.AddCategory(userID, data.Name)
 	if err != nil {
@@ -599,6 +652,7 @@ func (s *Server) addCategory(c *gin.Context) {
 // @Failure      	404  {object}  ErrorResponse 	"Данный бюджет отсутствует"
 // @Failure      	500  {object}  ErrorResponse 	"Ошибка при создании бюджета"
 // @Router       	/categories/{id} [patch]
+// @Security     	Auth
 func (s *Server) updateCategory(c *gin.Context) {
 	paramID := c.Param("id")
 	categoryID, err := strconv.ParseUint(paramID, 10, 64)
@@ -615,7 +669,7 @@ func (s *Server) updateCategory(c *gin.Context) {
 		return
 	}
 
-	userID := c.GetUint("jwt")
+	userID := c.GetUint(USER_ID_KEY)
 
 	success, err := s.categoryService.UpdateCategory(userID, uint(categoryID), data.Name)
 
@@ -644,6 +698,7 @@ func (s *Server) updateCategory(c *gin.Context) {
 // @Failure      	404  	{object}  	ErrorResponse 	"Данная категория отсутствует"
 // @Failure      	500  	{object}  	ErrorResponse 	"Ошибка при удалениии категории"
 // @Router       	/categories/{id} [delete]
+// @Security     	Auth
 func (s *Server) deleteCategory(c *gin.Context) {
 	paramID := c.Param("id")
 	budgetID, err := strconv.ParseUint(paramID, 10, 64)
@@ -653,7 +708,7 @@ func (s *Server) deleteCategory(c *gin.Context) {
 		return
 	}
 
-	userID := c.GetUint("jwt")
+	userID := c.GetUint(USER_ID_KEY)
 
 	success, err := s.categoryService.DeleteCategory(userID, uint(budgetID))
 	if err != nil {
@@ -678,8 +733,9 @@ func (s *Server) deleteCategory(c *gin.Context) {
 // @Failure      	401  {object}  ErrorResponse 			"Ошибка авторизации"
 // @Failure      	500  {object}  ErrorResponse 			"Ошибка при получении категории"
 // @Router       	/categories [get]
+// @Security     	Auth
 func (s *Server) categories(c *gin.Context) {
-	userID := c.GetUint("jwt")
+	userID := c.GetUint(USER_ID_KEY)
 
 	result, err := s.categoryService.Categories(userID)
 
@@ -704,6 +760,7 @@ func (s *Server) categories(c *gin.Context) {
 // @Failure      	409  {object}  ErrorResponse 	"Бюджет с данной категорией уже существует"
 // @Failure      	500  {object}  ErrorResponse 	"Ошибка при создании бюджета"
 // @Router       	/budgets [post]
+// @Security     	Auth
 func (s *Server) addBudget(c *gin.Context) {
 	var data AddBudgetFormat
 	if err := c.ShouldBindJSON(&data); err != nil {
@@ -712,7 +769,7 @@ func (s *Server) addBudget(c *gin.Context) {
 		return
 	}
 
-	userID := c.GetUint("jwt")
+	userID := c.GetUint(USER_ID_KEY)
 
 	if err := s.budgetService.AddBudget(userID, data.CategoryID, data.Limit); err != nil {
 		log.Println(err)
@@ -741,6 +798,7 @@ func (s *Server) addBudget(c *gin.Context) {
 // @Failure      	404  {object}  ErrorResponse 	"Данный бюджет отсутствует"
 // @Failure      	500  {object}  ErrorResponse 	"Ошибка при создании бюджета"
 // @Router       	/budgets/{id} [patch]
+// @Security     	Auth
 func (s *Server) updateBudget(c *gin.Context) {
 	paramID := c.Param("id")
 	budgetID, err := strconv.ParseUint(paramID, 10, 64)
@@ -757,7 +815,7 @@ func (s *Server) updateBudget(c *gin.Context) {
 		return
 	}
 
-	userID := c.GetUint("jwt")
+	userID := c.GetUint(USER_ID_KEY)
 
 	success, err := s.budgetService.UpdateBudget(userID, uint(budgetID), data.Limit)
 
@@ -786,6 +844,7 @@ func (s *Server) updateBudget(c *gin.Context) {
 // @Failure      	404  	{object}  	ErrorResponse 	"Данный бюджет отсутствует"
 // @Failure      	500  	{object}  	ErrorResponse 	"Ошибка при удалениии бюджета"
 // @Router       	/budgets/{id} [delete]
+// @Security     	Auth
 func (s *Server) deleteBudget(c *gin.Context) {
 	paramID := c.Param("id")
 	budgetID, err := strconv.ParseUint(paramID, 10, 64)
@@ -795,7 +854,7 @@ func (s *Server) deleteBudget(c *gin.Context) {
 		return
 	}
 
-	userID := c.GetUint("jwt")
+	userID := c.GetUint(USER_ID_KEY)
 
 	success, err := s.budgetService.DeleteBudget(userID, uint(budgetID))
 	if err != nil {
@@ -823,6 +882,7 @@ func (s *Server) deleteBudget(c *gin.Context) {
 // @Failure      	401  {object}  ErrorResponse 			"Ошибка авторизации"
 // @Failure      	500  {object}  ErrorResponse 			"Ошибка при получении бюджетов"
 // @Router       	/budgets [get]
+// @Security     	Auth
 func (s *Server) budgets(c *gin.Context) {
 	var data BudgetsFilter
 	if err := c.ShouldBindQuery(&data); err != nil {
@@ -838,7 +898,7 @@ func (s *Server) budgets(c *gin.Context) {
 		return
 	}
 
-	userID := c.GetUint("jwt")
+	userID := c.GetUint(USER_ID_KEY)
 
 	result, err := s.budgetService.Budgets(userID, parsedDate)
 

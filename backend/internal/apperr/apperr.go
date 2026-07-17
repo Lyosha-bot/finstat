@@ -7,4 +7,6 @@ var (
 	NoRow     = errors.New("no row")
 
 	ShortString = errors.New("short string")
+
+	TokenExpired = errors.New("token expired")
 )
