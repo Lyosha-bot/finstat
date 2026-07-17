@@ -3,7 +3,6 @@ package token
 import (
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -75,9 +74,6 @@ func Claims(jwt_token string, jwt_secret []byte) (*CustomClaims, error) {
 	if !token.Valid {
 		return nil, errors.New("Token is dead")
 	}
-
-	log.Println(result.UserID)
-	log.Println(result.UUID)
 
 	return &result, nil
 }

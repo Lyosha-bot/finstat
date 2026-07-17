@@ -10,8 +10,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-const ACCESS_TOKEN_LIFE_TIME = 10  //15 * 60
-const REFRESH_TOKEN_LIFE_TIME = 60 //7 * 24 * 60 * 60
+const ACCESS_TOKEN_LIFE_TIME = 15 * 60
+const REFRESH_TOKEN_LIFE_TIME = 7 * 24 * 60 * 60
 
 type User = repository.User
 type RefreshToken = repository.RefreshToken
@@ -105,6 +105,17 @@ func (s *AuthService) Login(username, password string) (accessToken string, refr
 	}
 
 	return s.generateTokens(user.ID)
+}
+
+func (s *AuthService) Logout(refreshToken string) error {
+	claims, err := token.Claims(refreshToken, s.jwtRefreshSecret)
+	if err != nil {
+		return lib.Ewrap("Couldn't get claims to logout", err)
+	}
+
+	_, err = s.repo.DeleteRefreshToken(claims.UUID)
+
+	return err
 }
 
 func (s *AuthService) ID(jwtAccessToken string) (uint, error) {

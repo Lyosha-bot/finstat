@@ -23,7 +23,7 @@ import (
 const (
 	JWT_COOKIE_NAME = "refresh_jwt"
 	USER_ID_KEY     = "user_id"
-	REFRESH_PATH    = "/api/auth/refresh"
+	REFRESH_PATH    = "/api/auth"
 )
 
 var (
@@ -31,7 +31,7 @@ var (
 )
 
 // @title Finstat API
-// @version 0.7
+// @version 0.9
 // @description Веб-приложения для учета личных финансов
 // @termsOfService http://swagger.io/terms/
 
@@ -177,6 +177,7 @@ func (s *Server) Start(port string) {
 	auth.POST("/register/is-valid", s.isValid)
 	auth.POST("/login", s.login)
 	auth.POST("/refresh", s.refresh)
+	auth.POST("/logout", s.logout)
 
 	transactions := api.Group("/transactions")
 	transactions.Use(s.middleware)
@@ -385,8 +386,6 @@ func (s *Server) refresh(c *gin.Context) {
 		return
 	}
 
-	log.Println("REFRESH COOKIE", cookie)
-
 	access, refresh, err := s.authService.Refresh(cookie)
 	if err != nil {
 		log.Println(err)
@@ -405,6 +404,44 @@ func (s *Server) refresh(c *gin.Context) {
 	)
 
 	c.JSON(http.StatusOK, gin.H{"result": access})
+}
+
+// @Summary 		Деавторизация пользователя
+// @Description  	Деавторизирует пользователя системы и удаляет jwt-токены
+// @Tags         	auth
+// @Produce      	json
+// @Success      	200			"Успешная деавторизация"
+// @Success			202			"Успешное удаление токена из куки"
+// @Failure      	401			"Пользователь не авторизован"
+// @Router       	/auth/logout [post]
+func (s *Server) logout(c *gin.Context) {
+	cookie, err := c.Cookie(JWT_COOKIE_NAME)
+
+	c.SetCookie(
+		JWT_COOKIE_NAME,
+		"",
+		-1,
+		REFRESH_PATH,
+		s.host,
+		true,
+		true,
+	)
+
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Пользователь не авторизован"})
+		return
+	}
+
+	err = s.authService.Logout(cookie)
+
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusAccepted, gin.H{"error": "Успешное удаление токена из куки"})
+		return
+	}
+
+	c.JSON(http.StatusOK, nil)
 }
 
 // @Summary 		Создание транзакции
