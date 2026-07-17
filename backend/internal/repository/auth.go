@@ -11,6 +11,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+const ACTIVE_REFRESH_TOKENS_COUNT = 4
+
 const (
 	INSERT_USER_QUERY = `
 		INSERT INTO users (name, password)
@@ -18,9 +20,23 @@ const (
 	`
 
 	INSERT_REFRESH_TOKEN_QUERY = `
-		INSERT INTO refresh_tokens (user_id, expires_at)
-		VALUES ($1, $2)
-		RETURNING uuid;
+		WITH inserted AS (
+			INSERT INTO refresh_tokens (user_id, expires_at)
+			VALUES ($1, $2)
+			RETURNING uuid
+		),
+		deleted AS (
+			DELETE FROM refresh_tokens
+			WHERE user_id = $1
+			AND uuid NOT IN (
+				SELECT uuid 
+				FROM refresh_tokens 
+				WHERE user_id = $1
+				ORDER BY created_at DESC
+				LIMIT $3
+			)
+		)
+		SELECT uuid FROM inserted;
 	`
 
 	DELETE_REFRESH_TOKEN_QUERY = `
@@ -101,7 +117,7 @@ func (c *Client) InsertRefreshToken(userID uint, expiresAt time.Time) (string, e
 	}
 	defer conn.Release()
 
-	row := conn.QueryRow(ctx, INSERT_REFRESH_TOKEN_QUERY, userID, expiresAt)
+	row := conn.QueryRow(ctx, INSERT_REFRESH_TOKEN_QUERY, userID, expiresAt, ACTIVE_REFRESH_TOKENS_COUNT)
 
 	var id string
 	if err := row.Scan(&id); err != nil {

@@ -55,7 +55,7 @@ func (s *AuthService) Register(username, password string) error {
 func (s *AuthService) generateTokens(userID uint) (accessToken string, refreshToken string, err error) {
 	uuid, err := s.repo.InsertRefreshToken(userID, time.Now().Add(time.Second*REFRESH_TOKEN_LIFE_TIME).UTC())
 	if err != nil {
-		return "", "", lib.Ewrap("Couldn't insert refresh token", err)
+		return "", "", err
 	}
 
 	refreshToken, err = token.NewRefreshToken(uuid, s.jwtRefreshSecret, REFRESH_TOKEN_LIFE_TIME)

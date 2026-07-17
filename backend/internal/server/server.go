@@ -359,7 +359,7 @@ func (s *Server) login(c *gin.Context) {
 	c.SetCookie(
 		JWT_COOKIE_NAME,
 		refresh,
-		service.REFRESH_TOKEN_LIFE_TIME*24*60*60,
+		service.REFRESH_TOKEN_LIFE_TIME,
 		REFRESH_PATH,
 		s.host,
 		true,
