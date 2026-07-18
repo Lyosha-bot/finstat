@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	ewrap "finstat/internal/lib"
+	"finstat/internal/lib"
 	"finstat/internal/repository"
 	"finstat/internal/server"
 	"finstat/internal/service"
@@ -23,17 +23,14 @@ func main() {
 
 	repo, err := repository.AddClient(postgresCreds)
 	if err != nil {
-		log.Fatalln(ewrap.Wrap("Couldn't create repo client", err))
+		log.Fatalln(lib.Ewrap("Couldn't create repo client", err))
 	}
 
-	authService := service.NewAuthService(repo, []byte(os.Getenv("JWT_SECRET")))
+	authService := service.NewAuthService(repo, []byte(os.Getenv("JWT_ACCESS_SECRET")), []byte(os.Getenv("JWT_REFRESH_SECRET")))
 
 	transactionsService := service.NewTransactionService(repo)
 
-	categoryService, err := service.NewCategoryService(repo)
-	if err != nil {
-		log.Fatalln(ewrap.Wrap("Couldn't get system categories", err))
-	}
+	categoryService := service.NewCategoryService(repo)
 
 	budgetService := service.NewBudgetService(repo)
 

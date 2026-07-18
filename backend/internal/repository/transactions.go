@@ -2,7 +2,7 @@ package repository
 
 import (
 	"context"
-	ewrap "finstat/internal/lib"
+	"finstat/internal/lib"
 	"fmt"
 	"strings"
 	"time"
@@ -76,7 +76,7 @@ func (c *Client) AddTransaction(userID uint, value decimal.Decimal, categoryID u
 
 	conn, err := c.pool.Acquire(ctx)
 	if err != nil {
-		return 0, ewrap.Wrap("Couldn't acquire connection", err)
+		return 0, lib.Ewrap("Couldn't acquire connection", err)
 	}
 	defer conn.Release()
 
@@ -85,7 +85,7 @@ func (c *Client) AddTransaction(userID uint, value decimal.Decimal, categoryID u
 	var id uint
 	err = row.Scan(&id)
 	if err != nil {
-		return 0, ewrap.Wrap("Couldn't get ID of new transaction", err)
+		return 0, lib.Ewrap("Couldn't get ID of new transaction", err)
 	}
 
 	return id, nil
@@ -96,14 +96,14 @@ func (c *Client) UpdateTransaction(userID uint, transactionID uint, newValue dec
 
 	conn, err := c.pool.Acquire(ctx)
 	if err != nil {
-		return false, ewrap.Wrap("Couldn't acquire connection", err)
+		return false, lib.Ewrap("Couldn't acquire connection", err)
 	}
 	defer conn.Release()
 
 	cmdTag, err := conn.Exec(ctx, UPDATE_TRANSACTION_QUERY, userID, transactionID, newValue, newCategoryID, newDescription, newDate)
 
 	if err != nil {
-		return false, ewrap.Wrap("Couldn't update transaction", err)
+		return false, lib.Ewrap("Couldn't update transaction", err)
 	}
 
 	return cmdTag.RowsAffected() != 0, nil
@@ -114,14 +114,14 @@ func (c *Client) DeleteTransaction(userID uint, transactionID uint) (bool, error
 
 	conn, err := c.pool.Acquire(ctx)
 	if err != nil {
-		return false, ewrap.Wrap("Couldn't acquire connection", err)
+		return false, lib.Ewrap("Couldn't acquire connection", err)
 	}
 	defer conn.Release()
 
 	cmdTag, err := conn.Exec(ctx, DELETE_TRANSACTION_QUERY, userID, transactionID)
 
 	if err != nil {
-		return false, ewrap.Wrap("Couldn't delete transaction", err)
+		return false, lib.Ewrap("Couldn't delete transaction", err)
 	}
 
 	return cmdTag.RowsAffected() != 0, nil
@@ -132,7 +132,7 @@ func (c *Client) TransactionByID(userID, transactionID uint) (*Transaction, erro
 
 	conn, err := c.pool.Acquire(ctx)
 	if err != nil {
-		return nil, ewrap.Wrap("Couldn't acquire connection", err)
+		return nil, lib.Ewrap("Couldn't acquire connection", err)
 	}
 	defer conn.Release()
 
@@ -140,7 +140,7 @@ func (c *Client) TransactionByID(userID, transactionID uint) (*Transaction, erro
 
 	var transaction Transaction
 	if err = row.Scan(&transaction); err != nil {
-		return nil, ewrap.Wrap("Couldn't get transaction by ID", err)
+		return nil, lib.Ewrap("Couldn't get transaction by ID", err)
 	}
 
 	return &transaction, nil
@@ -151,7 +151,7 @@ func (c *Client) Transactions(userID, limit, page uint, from, to *time.Time, tra
 
 	conn, err := c.pool.Acquire(ctx)
 	if err != nil {
-		return nil, ewrap.Wrap("Couldn't acquire connection", err)
+		return nil, lib.Ewrap("Couldn't acquire connection", err)
 	}
 	defer conn.Release()
 
@@ -203,21 +203,21 @@ func (c *Client) Transactions(userID, limit, page uint, from, to *time.Time, tra
 
 	rows, err := conn.Query(ctx, builder.String(), args...)
 	if err != nil {
-		return nil, ewrap.Wrap("Couldn't get transactions", err)
+		return nil, lib.Ewrap("Couldn't get transactions", err)
 	}
 
 	result := make([]Transaction, 0, limit)
 	for rows.Next() {
 		var val Transaction
 		if err = rows.Scan(&val); err != nil {
-			return nil, ewrap.Wrap("Couldn't scan transaction", err)
+			return nil, lib.Ewrap("Couldn't scan transaction", err)
 		}
 
 		result = append(result, val)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, ewrap.Wrap("Couldn't iterate transactions", err)
+		return nil, lib.Ewrap("Couldn't iterate transactions", err)
 	}
 
 	return result, nil

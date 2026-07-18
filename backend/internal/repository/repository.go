@@ -5,9 +5,8 @@ package repository
 
 import (
 	"context"
+	"finstat/internal/lib"
 	"fmt"
-
-	ewrap "finstat/internal/lib"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -31,12 +30,12 @@ func AddClient(creds Credentials) (*Client, error) {
 
 	pool, err := pgxpool.New(ctx, connString)
 	if err != nil {
-		return nil, ewrap.Wrap("Couldn't create pgxpool", err)
+		return nil, lib.Ewrap("Couldn't create pgxpool", err)
 	}
 
 	err = pool.Ping(ctx)
 	if err != nil {
-		return nil, ewrap.Wrap("Couldn't ping database", err)
+		return nil, lib.Ewrap("Couldn't ping database", err)
 	}
 
 	return &Client{

@@ -1,68 +1,128 @@
 package service
 
 import (
-	ewrap "finstat/internal/lib"
+	"finstat/internal/apperr"
+	"finstat/internal/lib"
 	"finstat/internal/repository"
 	"finstat/internal/token"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
 
-const TOKEN_LIFE_TIME = 15
+const ACCESS_TOKEN_LIFE_TIME = 15 * 60
+const REFRESH_TOKEN_LIFE_TIME = 7 * 24 * 60 * 60
+
+type User = repository.User
+type RefreshToken = repository.RefreshToken
 
 type AuthRepo interface {
 	InsertUser(username, password string) error
-	User(username string) (*repository.User, error)
+	InsertRefreshToken(userID uint, expires_at time.Time) (string, error)
+	DeleteRefreshToken(tokenUUID string) (bool, error)
+	DeleteAllRefreshTokens(userID uint) (bool, error)
+	User(username string) (*User, error)
+	RefreshToken(tokenUUID string) (*RefreshToken, error)
 }
 
 type AuthService struct {
-	repo      AuthRepo
-	jwtSecret []byte
+	repo             AuthRepo
+	jwtAccessSecret  []byte
+	jwtRefreshSecret []byte
 }
 
-func NewAuthService(repo AuthRepo, jwtSecret []byte) *AuthService {
+func NewAuthService(repo AuthRepo, jwtAccessSecret, jwtRefreshSecret []byte) *AuthService {
 	return &AuthService{
-		repo:      repo,
-		jwtSecret: jwtSecret,
+		repo:             repo,
+		jwtAccessSecret:  jwtAccessSecret,
+		jwtRefreshSecret: jwtRefreshSecret,
 	}
 }
 
 func (s *AuthService) Register(username, password string) error {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return ewrap.Wrap("Couldn't generate hashed password", err)
+		return lib.Ewrap("Couldn't generate hashed password", err)
 	}
 
 	if err := s.repo.InsertUser(username, string(hashedPassword)); err != nil {
-		return ewrap.Wrap("Couldn't insert new user", err)
+		return err
 	}
 
 	return nil
 }
 
-func (s *AuthService) Login(username, password string) (string, error) {
+func (s *AuthService) generateTokens(userID uint) (accessToken string, refreshToken string, err error) {
+	uuid, err := s.repo.InsertRefreshToken(userID, time.Now().Add(time.Second*REFRESH_TOKEN_LIFE_TIME).UTC())
+	if err != nil {
+		return "", "", err
+	}
+
+	refreshToken, err = token.NewRefreshToken(uuid, s.jwtRefreshSecret, REFRESH_TOKEN_LIFE_TIME)
+	if err != nil {
+		return "", "", lib.Ewrap("Couldn't generate new refresh token", err)
+	}
+
+	accessToken, err = token.NewAccessToken(userID, s.jwtAccessSecret, ACCESS_TOKEN_LIFE_TIME)
+	if err != nil {
+		return "", "", lib.Ewrap("Couldn't generate new access token", err)
+	}
+
+	return accessToken, refreshToken, nil
+}
+
+func (s *AuthService) Refresh(refreshToken string) (newAccessToken string, newRefreshToken string, err error) {
+	claims, err := token.Claims(refreshToken, s.jwtRefreshSecret)
+	if err != nil {
+		return "", "", err
+	}
+
+	token, err := s.repo.RefreshToken(claims.UUID)
+	if err != nil {
+		return "", "", err
+	}
+
+	_, err = s.repo.DeleteRefreshToken(token.UUID)
+	if err != nil {
+		return "", "", err
+	}
+
+	if token.ExpiresAt.Before(time.Now().UTC()) {
+		return "", "", apperr.TokenExpired
+	}
+
+	return s.generateTokens(token.UserID)
+}
+
+func (s *AuthService) Login(username, password string) (accessToken string, refreshToken string, err error) {
 	user, err := s.repo.User(username)
 	if err != nil {
-		return "", ewrap.Wrap("Couldn't get user", err)
+		return "", "", lib.Ewrap("Couldn't get user", err)
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.HashedPassword), []byte(password)); err != nil {
-		return "", ewrap.Wrap("Passwords mismatched", err)
+		return "", "", lib.Ewrap("Passwords mismatched", err)
 	}
 
-	newToken, err := token.AddToken(user.ID, s.jwtSecret, TOKEN_LIFE_TIME)
-	if err != nil {
-		return "", ewrap.Wrap("Couldn't generate new token", err)
-	}
-
-	return newToken, nil
+	return s.generateTokens(user.ID)
 }
 
-func (s *AuthService) ID(jwtToken string) (uint, error) {
-	id, err := token.ID(jwtToken, s.jwtSecret)
+func (s *AuthService) Logout(refreshToken string) error {
+	claims, err := token.Claims(refreshToken, s.jwtRefreshSecret)
 	if err != nil {
-		return 0, ewrap.Wrap("Invalid token", err)
+		return lib.Ewrap("Couldn't get claims to logout", err)
 	}
 
-	return id, nil
+	_, err = s.repo.DeleteRefreshToken(claims.UUID)
+
+	return err
+}
+
+func (s *AuthService) ID(jwtAccessToken string) (uint, error) {
+	claims, err := token.Claims(jwtAccessToken, s.jwtAccessSecret)
+	if err != nil {
+		return 0, lib.Ewrap("Invalid token", err)
+	}
+
+	return claims.UserID, nil
 }
