@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { login, register, checkRegisterValidity } from '../api/auth'
 
 interface LoginProps {
-  onLogin: (username: string) => void
+  onLogin: (username: string, accessToken: string) => void
 }
 
 export const Login = ({ onLogin }: LoginProps) => {
@@ -14,11 +14,11 @@ export const Login = ({ onLogin }: LoginProps) => {
   const [loading, setLoading] = useState(false)
   const [isChecking, setIsChecking] = useState(false)
 
-  // Проверка регистрации при потере фокуса
+  // Проверка на потерю фокуса (onBlur)
   const validateRegistration = async () => {
     if (!isRegister) return
     if (!username.trim() || !password.trim()) {
-      setError('') // если поля пустые
+      setError('')
       return
     }
     if (password !== confirmPassword) {
@@ -28,7 +28,7 @@ export const Login = ({ onLogin }: LoginProps) => {
     setIsChecking(true)
     try {
       await checkRegisterValidity(username, password)
-      setError('') // если всё ок
+      setError('')
     } catch (err: any) {
       setError(err.message || 'Ошибка проверки')
     } finally {
@@ -36,7 +36,6 @@ export const Login = ({ onLogin }: LoginProps) => {
     }
   }
 
-  // Обработчики потери фокуса
   const handleUsernameBlur = () => {
     if (username.trim()) validateRegistration()
   }
@@ -68,17 +67,16 @@ export const Login = ({ onLogin }: LoginProps) => {
 
     try {
       if (isRegister) {
-        // Перед регистрацией можно ещё раз проверить (на случай, если проверка не сработала)
+        // Проверяем ещё раз перед регистрацией
         await checkRegisterValidity(username, password)
         await register(username, password)
-        await login(username, password)
+        // Автоматический вход
+        const data = await login(username, password)
+        onLogin(username, data.result)
       } else {
-        await login(username, password)
+        const data = await login(username, password)
+        onLogin(username, data.result)
       }
-
-      localStorage.setItem('auth', 'true')
-      localStorage.setItem('username', username)
-      onLogin(username)
     } catch (err: any) {
       setError(err.message || 'Неизвестная ошибка')
     } finally {
@@ -91,7 +89,6 @@ export const Login = ({ onLogin }: LoginProps) => {
     setError('')
     setPassword('')
     setConfirmPassword('')
-    setUsername('')
   }
 
   return (

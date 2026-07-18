@@ -42,7 +42,8 @@ export const Budgets = ({ budgets, loading, error, onDeleteBudget, onEditBudget 
       <h2>Бюджеты</h2>
       <div className="budget-grid">
         {budgets.map(budget => {
-          const percent = Math.min((budget.current_value / budget.limit_value) * 100, 100)
+          const spent = Math.abs(budget.current_value)
+          const percent = Math.min((spent / budget.limit_value) * 100, 100)
           const color = percent > 90 ? '#ef4444' : percent > 70 ? '#f59e0b' : '#4ade80'
           return (
             <div key={budget.id} className="budget-card">
@@ -64,7 +65,7 @@ export const Budgets = ({ budgets, loading, error, onDeleteBudget, onEditBudget 
                 </div>
               </div>
               <div className="budget-amounts">
-                <span>{formatMoney(budget.current_value)}</span>
+                <span>{formatMoney(spent)}</span>
                 <span>/ {formatMoney(budget.limit_value)}</span>
               </div>
               <div className="budget-bar">

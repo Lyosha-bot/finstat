@@ -7,14 +7,14 @@ export interface TransactionResponse {
 
 export interface CreateTransactionPayload {
   amount: number
-  category: number
+  category_id: number   // ✅ было category, исправлено на category_id
   date: string
   description: string
 }
 
 export interface UpdateTransactionPayload {
   amount: number
-  category: number
+  category_id: number   // ✅ было category, исправлено на category_id
   date: string
   description: string
 }

@@ -12,6 +12,7 @@ import {
   StatsDashboard,
   AddTransactionModal,
   BudgetModal,
+  CategoryManagerModal,
 } from './index'
 
 interface DashboardProps {
@@ -22,6 +23,7 @@ interface DashboardProps {
 export const Dashboard = ({ username, onLogout }: DashboardProps) => {
   // ===== Категории =====
   const { categories, loading: categoriesLoading } = useCategories()
+  const [showCategoryManagerModal, setShowCategoryManagerModal] = useState(false)
 
   // ===== Бюджеты =====
   const currentDate = new Date().toISOString().split('T')[0]
@@ -280,7 +282,7 @@ export const Dashboard = ({ username, onLogout }: DashboardProps) => {
     const payload = {
       description: formData.description,
       amount: formData.type === 'income' ? amount : -amount,
-      category: formData.category,
+      category_id: formData.category,
       date: formData.date,
     }
     try {
@@ -325,7 +327,7 @@ export const Dashboard = ({ username, onLogout }: DashboardProps) => {
     const payload = {
       description: formData.description,
       amount: formData.type === 'income' ? amount : -amount,
-      category: formData.category,
+      category_id: formData.category,
       date: formData.date,
     }
     try {
@@ -390,6 +392,7 @@ export const Dashboard = ({ username, onLogout }: DashboardProps) => {
           setShowAddModal(true)
         }}
         onBudgetClick={() => setShowBudgetModal(true)}
+        onCategoryManagerClick={() => setShowCategoryManagerModal(true)}
         onLogout={onLogout}
         username={username}
       />
@@ -437,7 +440,10 @@ export const Dashboard = ({ username, onLogout }: DashboardProps) => {
         <StatsDashboard
           incomeStats={incomeStats}
           expenseStats={expenseStats}
-          budgetStats={budgets.map(b => ({ ...b, spent: b.current_value, percent: Math.min((b.current_value / b.limit_value) * 100, 100) }))}
+          budgetStats={budgets.map(b => {
+            const spent = Math.abs(b.current_value)
+            return { ...b, spent, percent: Math.min((spent / b.limit_value) * 100, 100) }
+          })}
           cumulative={cumulative}
           avgDaily={avgDaily}
           weekdayStats={weekdayStats}
@@ -471,6 +477,12 @@ export const Dashboard = ({ username, onLogout }: DashboardProps) => {
         onClose={() => setShowBudgetModal(false)}
         categories={categories}
         onCreateBudget={handleCreateBudget}
+      />
+
+      {/* ===== Модалка управления категориями ===== */}
+      <CategoryManagerModal
+        isOpen={showCategoryManagerModal}
+        onClose={() => setShowCategoryManagerModal(false)}
       />
 
       {/* ===== Модалка подтверждения ===== */}

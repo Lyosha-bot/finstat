@@ -92,7 +92,7 @@ export const StatsDashboard = ({
                   <div key={b.id} className="bar-item">
                     <span className="bar-label">{b.category}</span>
                     <div className="bar-track"><div className="bar-fill" style={{ width: `${b.percent}%`, backgroundColor: color }} /></div>
-                    <span className="bar-value">{formatMoney(b.spent)} / {formatMoney(b.limit)}</span>
+                    <span className="bar-value">{formatMoney(b.spent)} / {formatMoney(b.limit_value)}</span>
                   </div>
                 )
               })}
