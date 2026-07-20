@@ -40,7 +40,7 @@ const (
 		FROM budgets b
 		LEFT JOIN categories c ON c.id = b.category_id
 		LEFT JOIN transactions t ON t.user_id = b.user_id 
-			AND (b.category_id IS NULL OR t.category_id = b.category_id) 
+			AND t.category_id = b.category_id
 			AND t.date >= $2 
 			AND t.date < $3
 			AND t.value < 0
@@ -58,7 +58,7 @@ const (
 		FROM budgets b
 		LEFT JOIN categories c ON c.id = b.category_id
 		LEFT JOIN transactions t ON t.user_id = b.user_id 
-			AND (b.category_id IS NULL OR t.category_id = b.category_id) 
+			AND t.category_id = b.category_id
 			AND t.date >= $3 
 			AND t.date < $4
 			AND t.value < 0
