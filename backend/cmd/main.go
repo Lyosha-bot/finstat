@@ -21,7 +21,7 @@ func main() {
 		DB_name:  os.Getenv("DB_NAME"),
 	}
 
-	repo, err := repository.AddClient(postgresCreds)
+	repo, err := repository.InsertClient(postgresCreds)
 	if err != nil {
 		log.Fatalln(lib.Ewrap("Couldn't create repo client", err))
 	}
@@ -34,7 +34,7 @@ func main() {
 
 	budgetService := service.NewBudgetService(repo)
 
-	server := server.AddServer(os.Getenv("HOST"), authService, transactionsService, categoryService, budgetService)
+	server := server.InsertServer(os.Getenv("HOST"), authService, transactionsService, categoryService, budgetService)
 
 	log.Println("Backend is running")
 

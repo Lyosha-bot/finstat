@@ -8,7 +8,7 @@ import (
 type Category = repository.Category
 
 type CategoryRepo interface {
-	AddCategory(userID uint, categoryName string) (uint, error)
+	InsertCategory(userID uint, categoryName string) (uint, error)
 	UpdateCategory(userID, categoryID uint, newCategoryName string) (bool, error)
 	DeleteCategory(userID, categoryID uint) (bool, error)
 	SystemCategories() ([]Category, error)
@@ -28,13 +28,13 @@ func NewCategoryService(repo CategoryRepo) *CategoryService {
 	}
 }
 
-func (s *CategoryService) AddCategory(userID uint, categoryName string) (uint, error) {
+func (s *CategoryService) InsertCategory(userID uint, categoryName string) (uint, error) {
 	formattedName, err := lib.FormatName(categoryName, 3)
 	if err != nil {
 		return 0, err
 	}
 
-	return s.repo.AddCategory(userID, formattedName)
+	return s.repo.InsertCategory(userID, formattedName)
 }
 
 func (s *CategoryService) UpdateCategory(userID, categoryID uint, newCategoryName string) (bool, error) {

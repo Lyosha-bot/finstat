@@ -7,12 +7,13 @@ import (
 	"finstat/internal/lib"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/shopspring/decimal"
 )
 
 const (
-	ADD_BUDGET_QUERY = `
+	INSERT_BUDGET_QUERY = `
 		INSERT INTO budgets (user_id, category_id, limit_value) 
 		VALUES ($1, $2, $3);
 	`
@@ -32,29 +33,49 @@ const (
 	BUDGETS_QUERY = `
 		SELECT 
 			b.id,
-			COALESCE(c.name, 'Все категории'),
+			c.id AS category_id,
+			COALESCE(c.name, 'Все категории') AS category_name,
 			b.limit_value,
 			COALESCE(SUM(t.value), 0)
 		FROM budgets b
 		LEFT JOIN categories c ON c.id = b.category_id
 		LEFT JOIN transactions t ON t.user_id = b.user_id 
-			AND (b.category_id IS NULL OR t.category_id = b.category_id) 
+			AND t.category_id = b.category_id
 			AND t.date >= $2 
 			AND t.date < $3
 			AND t.value < 0
 		WHERE b.user_id = $1
-		GROUP BY b.id, c.name;
+		GROUP BY b.id, c.id;
+	`
+
+	BUDGET_BY_CATEGORY_QUERY = `
+		SELECT
+			b.id,
+			c.id AS category_id,
+			COALESCE(c.name, 'Все категории') AS category_name,
+			b.limit_value,
+			COALESCE(SUM(t.value), 0) AS current_value
+		FROM budgets b
+		LEFT JOIN categories c ON c.id = b.category_id
+		LEFT JOIN transactions t ON t.user_id = b.user_id 
+			AND t.category_id = b.category_id
+			AND t.date >= $3 
+			AND t.date < $4
+			AND t.value < 0
+		WHERE b.user_id = $1 AND b.category_id = $2
+		GROUP BY b.id, c.id;
 	`
 )
 
 type Budget struct {
 	ID           uint            `json:"id" db:"id"`
-	Name         string          `json:"name" db:"name"`
+	CategoryID   uint            `json:"category_id" db:"category_id"`
+	CategoryName string          `json:"category_name" db:"category_name"`
 	LimitValue   decimal.Decimal `json:"limit_value" db:"limit_value"`
 	CurrentValue decimal.Decimal `json:"current_value" db:"current_value"`
 }
 
-func (c *Client) AddBudget(userID, categoryID uint, limit decimal.Decimal) error {
+func (c *Client) InsertBudget(userID, categoryID uint, limit decimal.Decimal) error {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -63,7 +84,7 @@ func (c *Client) AddBudget(userID, categoryID uint, limit decimal.Decimal) error
 	}
 	defer conn.Release()
 
-	_, err = conn.Exec(ctx, ADD_BUDGET_QUERY, userID, categoryID, limit)
+	_, err = conn.Exec(ctx, INSERT_BUDGET_QUERY, userID, categoryID, limit)
 
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -127,15 +148,20 @@ func (c *Client) Budgets(userID uint, from, to time.Time) ([]Budget, error) {
 
 	rows, err := conn.Query(ctx, BUDGETS_QUERY, userID, from, to)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperr.NoRows
+		}
 		return nil, lib.Ewrap("Couldn't get budgets data", err)
 	}
 
 	result := make([]Budget, 0, 5)
 	for rows.Next() {
 		var val Budget
-		if err = rows.Scan(&val.ID, &val.Name, &val.LimitValue, &val.CurrentValue); err != nil {
+		if err = rows.Scan(&val.ID, &val.CategoryID, &val.CategoryName, &val.LimitValue, &val.CurrentValue); err != nil {
 			return nil, lib.Ewrap("Couldn't scan budget", err)
 		}
+
+		val.CurrentValue = val.CurrentValue.Abs()
 
 		result = append(result, val)
 	}
@@ -145,4 +171,29 @@ func (c *Client) Budgets(userID uint, from, to time.Time) ([]Budget, error) {
 	}
 
 	return result, nil
+}
+
+func (c *Client) BudgetByCategory(userID, categoryID uint, from, to time.Time) (*Budget, error) {
+	ctx := context.Background()
+
+	conn, err := c.pool.Acquire(ctx)
+	if err != nil {
+		return nil, lib.Ewrap("Couldn't acquire connection", err)
+	}
+	defer conn.Release()
+
+	row := conn.QueryRow(ctx, BUDGET_BY_CATEGORY_QUERY, userID, categoryID, from, to)
+
+	var result Budget
+	err = row.Scan(&result.ID, &result.CategoryID, &result.CategoryName, &result.LimitValue, &result.CurrentValue)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperr.NoRows
+		}
+		return nil, lib.Ewrap("Couldn't get budget data", err)
+	}
+
+	result.CurrentValue = result.CurrentValue.Abs()
+
+	return &result, nil
 }
