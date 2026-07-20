@@ -5,9 +5,8 @@ package repository
 
 import (
 	"context"
+	"finstat/internal/lib"
 	"fmt"
-
-	ewrap "finstat/internal/lib"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -24,19 +23,19 @@ type Client struct {
 	pool *pgxpool.Pool
 }
 
-func NewClient(creds Credentials) (*Client, error) {
+func InsertClient(creds Credentials) (*Client, error) {
 	ctx := context.Background()
 
 	connString := fmt.Sprintf("postgres://%s:%s@%s:%s/%s", creds.Username, creds.Password, creds.Host, creds.Port, creds.DB_name)
 
 	pool, err := pgxpool.New(ctx, connString)
 	if err != nil {
-		return nil, ewrap.Wrap("Couldn't create pgxpool", err)
+		return nil, lib.Ewrap("Couldn't create pgxpool", err)
 	}
 
 	err = pool.Ping(ctx)
 	if err != nil {
-		return nil, ewrap.Wrap("Couldn't ping database", err)
+		return nil, lib.Ewrap("Couldn't ping database", err)
 	}
 
 	return &Client{

@@ -1,6 +1,6 @@
 basePath: /api
 definitions:
-  server.AddTransactionFormat:
+  server.InsertTransactionFormat:
     properties:
       amount:
         type: number
@@ -128,7 +128,7 @@ paths:
         name: input
         required: true
         schema:
-          $ref: '#/definitions/server.AddTransactionFormat'
+          $ref: '#/definitions/server.InsertTransactionFormat'
       produces:
       - application/json
       responses:

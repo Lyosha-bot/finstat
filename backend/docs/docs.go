@@ -163,7 +163,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/server.AddTransactionFormat"
+                            "$ref": "#/definitions/server.InsertTransactionFormat"
                         }
                     }
                 ],
@@ -209,7 +209,7 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "server.AddTransactionFormat": {
+        "server.InsertTransactionFormat": {
             "type": "object",
             "required": [
                 "amount",

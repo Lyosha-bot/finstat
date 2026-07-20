@@ -6,4 +6,4 @@ CREATE TABLE transactions (
     date DATE NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_transactions_user_date ON transactions (user_id, date DESC);
+CREATE INDEX idx_transactions_user_date ON transactions(user_id, date DESC);

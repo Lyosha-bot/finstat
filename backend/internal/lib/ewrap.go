@@ -1,9 +1,9 @@
-package ewrap
+package lib
 
 import (
 	"fmt"
 )
 
-func Wrap(prefix string, err error) error {
-	return fmt.Errorf("%s -> %s", prefix, err)
+func Ewrap(prefix string, err error) error {
+	return fmt.Errorf("%s -> %w", prefix, err)
 }
