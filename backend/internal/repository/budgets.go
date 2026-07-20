@@ -32,7 +32,8 @@ const (
 	BUDGETS_QUERY = `
 		SELECT 
 			b.id,
-			COALESCE(c.name, 'Все категории'),
+			c.id AS category_id,
+			COALESCE(c.name, 'Все категории') AS category_name,
 			b.limit_value,
 			COALESCE(SUM(t.value), 0)
 		FROM budgets b
@@ -43,13 +44,32 @@ const (
 			AND t.date < $3
 			AND t.value < 0
 		WHERE b.user_id = $1
-		GROUP BY b.id, c.name;
+		GROUP BY b.id, c.id;
+	`
+
+	BUDGET_BY_CATEGORY_QUERY = `
+		SELECT
+			b.id,
+			c.id AS category_id,
+			COALESCE(c.name, 'Все категории') AS category_name,
+			b.limit_value,
+			COALESCE(SUM(t.value), 0) AS current_value
+		FROM budgets b
+		LEFT JOIN categories c ON c.id = b.category_id
+		LEFT JOIN transactions t ON t.user_id = b.user_id 
+			AND (b.category_id IS NULL OR t.category_id = b.category_id) 
+			AND t.date >= $3 
+			AND t.date < $4
+			AND t.value < 0
+		WHERE b.user_id = $1 AND b.category_id = $2
+		GROUP BY b.id, c.id;
 	`
 )
 
 type Budget struct {
 	ID           uint            `json:"id" db:"id"`
-	Name         string          `json:"name" db:"name"`
+	CategoryID   uint            `json:"category_id" db:"category_id"`
+	CategoryName string          `json:"category_name" db:"category_name"`
 	LimitValue   decimal.Decimal `json:"limit_value" db:"limit_value"`
 	CurrentValue decimal.Decimal `json:"current_value" db:"current_value"`
 }
@@ -133,9 +153,11 @@ func (c *Client) Budgets(userID uint, from, to time.Time) ([]Budget, error) {
 	result := make([]Budget, 0, 5)
 	for rows.Next() {
 		var val Budget
-		if err = rows.Scan(&val.ID, &val.Name, &val.LimitValue, &val.CurrentValue); err != nil {
+		if err = rows.Scan(&val.ID, &val.CategoryID, &val.CategoryName, &val.LimitValue, &val.CurrentValue); err != nil {
 			return nil, lib.Ewrap("Couldn't scan budget", err)
 		}
+
+		val.CurrentValue = val.CurrentValue.Abs()
 
 		result = append(result, val)
 	}
@@ -145,4 +167,26 @@ func (c *Client) Budgets(userID uint, from, to time.Time) ([]Budget, error) {
 	}
 
 	return result, nil
+}
+
+func (c *Client) BudgetByCategory(userID, categoryID uint, from, to time.Time) (*Budget, error) {
+	ctx := context.Background()
+
+	conn, err := c.pool.Acquire(ctx)
+	if err != nil {
+		return nil, lib.Ewrap("Couldn't acquire connection", err)
+	}
+	defer conn.Release()
+
+	row := conn.QueryRow(ctx, BUDGET_BY_CATEGORY_QUERY, userID, categoryID, from, to)
+
+	var result Budget
+	err = row.Scan(&result.ID, &result.CategoryID, &result.CategoryName, &result.LimitValue, &result.CurrentValue)
+	if err != nil {
+		return nil, lib.Ewrap("Couldn't get budget data", err)
+	}
+
+	result.CurrentValue = result.CurrentValue.Abs()
+
+	return &result, nil
 }

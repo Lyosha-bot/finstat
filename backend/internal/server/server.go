@@ -156,6 +156,10 @@ type BudgetsResponse struct {
 	Result []service.Budget `json:"result"`
 }
 
+type BudgetResponse struct {
+	Result service.Budget `json:"result"`
+}
+
 func AddServer(host string, authService *service.AuthService, transactionsService *service.TransactionService, categoryService *service.CategoryService, budgetService *service.BudgetService) *Server {
 	return &Server{
 		host:               host,
@@ -197,6 +201,7 @@ func (s *Server) Start(port string) {
 	budgets.Use(s.middleware)
 	budgets.POST("", s.addBudget)
 	budgets.GET("", s.budgets)
+	budgets.GET("/category/:id", s.budgetByCategory)
 	budgets.PATCH("/:id", s.updateBudget)
 	budgets.DELETE("/:id", s.deleteBudget)
 
@@ -913,7 +918,7 @@ func (s *Server) deleteBudget(c *gin.Context) {
 // @Tags         	budgets
 // @Accept       	json
 // @Produce      	json
-// @Param        	query query BudgetsFilter true "Дата в котором рассамтривается бюджет, из нее берется год и месяц"
+// @Param        	query query BudgetsFilter true "Дата в котором рассамтриваются бюджеты, из нее берется год и месяц"
 // @Success      	200  {object}  BudgetsResponse 			"Успешное получение бюджетов"
 // @Failure      	400  {object}  ErrorResponse 			"Неверно заполнена дата"
 // @Failure      	401  {object}  ErrorResponse 			"Ошибка авторизации"
@@ -938,6 +943,55 @@ func (s *Server) budgets(c *gin.Context) {
 	userID := c.GetUint(USER_ID_KEY)
 
 	result, err := s.budgetService.Budgets(userID, parsedDate)
+
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при получении бюджетов"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"result": result})
+}
+
+// @Summary 		Получение информации о бюджете на данную категорию
+// @Description  	Возвращает бюджет и текущие затраты
+// @Tags         	budgets
+// @Accept       	json
+// @Produce      	json
+// @Param			id		path 		int 				true	"ID категории"
+// @Param        	query 	query 		BudgetsFilter 		true 	"Дата в котором рассамтривается бюджет, из нее берется год и месяц"
+// @Success      	200  {object}  BudgetResponse 			"Успешное получение бюджетов"
+// @Failure      	400  {object}  ErrorResponse 			"Неверно заполнена дата"
+// @Failure      	401  {object}  ErrorResponse 			"Ошибка авторизации"
+// @Failure      	500  {object}  ErrorResponse 			"Ошибка при получении бюджетов"
+// @Router       	/budgets/category/{id} [get]
+// @Security     	Auth
+func (s *Server) budgetByCategory(c *gin.Context) {
+	paramID := c.Param("id")
+	categoryID, err := strconv.ParseUint(paramID, 10, 64)
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверно указано ID категории"})
+		return
+	}
+
+	var data BudgetsFilter
+	if err := c.ShouldBindQuery(&data); err != nil {
+		log.Println(err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверно заполнена дата"})
+		return
+	}
+
+	parsedDate, err := time.Parse("2006-01-02", data.Date)
+	if err != nil {
+		log.Println(err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверно заполнена дата"})
+		return
+	}
+
+	userID := c.GetUint(USER_ID_KEY)
+
+	result, err := s.budgetService.BudgetByCategory(userID, uint(categoryID), parsedDate)
 
 	if err != nil {
 		log.Println(err)
