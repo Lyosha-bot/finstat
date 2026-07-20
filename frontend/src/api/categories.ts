@@ -52,8 +52,6 @@ export const getUserCategories = async (): Promise<{ result: Category[] }> => {
   return response.json()
 }
 
-// ===== НОВЫЕ МЕТОДЫ =====
-
 export const createCategory = async (payload: CreateCategoryPayload): Promise<{ id: number }> => {
   const response = await apiClient('/categories', {
     method: 'POST',
