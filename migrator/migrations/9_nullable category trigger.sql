@@ -1,3 +1,5 @@
+INSERT INTO categories(id, name) VALUES (0, 'Без категории');
+
 CREATE OR REPLACE FUNCTION reset_category_to_zero()
 RETURNS TRIGGER AS $$
 BEGIN
