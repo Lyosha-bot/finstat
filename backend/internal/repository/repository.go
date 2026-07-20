@@ -23,7 +23,7 @@ type Client struct {
 	pool *pgxpool.Pool
 }
 
-func AddClient(creds Credentials) (*Client, error) {
+func InsertClient(creds Credentials) (*Client, error) {
 	ctx := context.Background()
 
 	connString := fmt.Sprintf("postgres://%s:%s@%s:%s/%s", creds.Username, creds.Password, creds.Host, creds.Port, creds.DB_name)

@@ -175,10 +175,9 @@ func (c *Client) User(username string) (*User, error) {
 	row := conn.QueryRow(ctx, USER_QUERY, username)
 
 	var result User
-	err = row.Scan(&result)
-	if err != nil {
+	if err := row.Scan(&result); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, apperr.NoRow
+			return nil, apperr.NoRows
 		}
 		return nil, lib.Ewrap("Couldn't get user data", err)
 	}
@@ -200,7 +199,7 @@ func (c *Client) RefreshToken(uuid string) (*RefreshToken, error) {
 	var result RefreshToken
 	if err := row.Scan(&result); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, apperr.NoRow
+			return nil, apperr.NoRows
 		}
 		return nil, lib.Ewrap("Couldn't get refresh token data", err)
 	}

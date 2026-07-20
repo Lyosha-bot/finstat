@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	ADD_TRANSACTION_QUERY = `
+	INSERT_TRANSACTION_QUERY = `
 		INSERT INTO transactions (user_id, value, category_id, description, date)
 		SELECT $1, $2, id, $4, $5
 		FROM categories
@@ -71,7 +71,7 @@ type Transaction struct {
 	Date        time.Time       `json:"date" db:"date"`
 }
 
-func (c *Client) AddTransaction(userID uint, value decimal.Decimal, categoryID uint, description string, date time.Time) (uint, error) {
+func (c *Client) InsertTransaction(userID uint, value decimal.Decimal, categoryID uint, description string, date time.Time) (uint, error) {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -80,7 +80,7 @@ func (c *Client) AddTransaction(userID uint, value decimal.Decimal, categoryID u
 	}
 	defer conn.Release()
 
-	row := conn.QueryRow(ctx, ADD_TRANSACTION_QUERY, userID, value, categoryID, description, date)
+	row := conn.QueryRow(ctx, INSERT_TRANSACTION_QUERY, userID, value, categoryID, description, date)
 
 	var id uint
 	err = row.Scan(&id)

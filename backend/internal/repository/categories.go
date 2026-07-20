@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	ADD_CATEGORY_QUERY = `
+	INSERT_CATEGORY_QUERY = `
 		INSERT INTO categories (user_id, name) 
 		VALUES ($1, $2) 
 		RETURNING id
@@ -57,7 +57,7 @@ type Category struct {
 	Name string `json:"name" db:"name"`
 }
 
-func (c *Client) AddCategory(userID uint, categoryName string) (uint, error) {
+func (c *Client) InsertCategory(userID uint, categoryName string) (uint, error) {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -66,7 +66,7 @@ func (c *Client) AddCategory(userID uint, categoryName string) (uint, error) {
 	}
 	defer conn.Release()
 
-	row := conn.QueryRow(ctx, ADD_CATEGORY_QUERY, userID, categoryName)
+	row := conn.QueryRow(ctx, INSERT_CATEGORY_QUERY, userID, categoryName)
 
 	var id uint
 	err = row.Scan(&id)

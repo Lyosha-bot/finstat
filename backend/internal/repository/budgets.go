@@ -7,12 +7,13 @@ import (
 	"finstat/internal/lib"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/shopspring/decimal"
 )
 
 const (
-	ADD_BUDGET_QUERY = `
+	INSERT_BUDGET_QUERY = `
 		INSERT INTO budgets (user_id, category_id, limit_value) 
 		VALUES ($1, $2, $3);
 	`
@@ -74,7 +75,7 @@ type Budget struct {
 	CurrentValue decimal.Decimal `json:"current_value" db:"current_value"`
 }
 
-func (c *Client) AddBudget(userID, categoryID uint, limit decimal.Decimal) error {
+func (c *Client) InsertBudget(userID, categoryID uint, limit decimal.Decimal) error {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -83,7 +84,7 @@ func (c *Client) AddBudget(userID, categoryID uint, limit decimal.Decimal) error
 	}
 	defer conn.Release()
 
-	_, err = conn.Exec(ctx, ADD_BUDGET_QUERY, userID, categoryID, limit)
+	_, err = conn.Exec(ctx, INSERT_BUDGET_QUERY, userID, categoryID, limit)
 
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -147,6 +148,9 @@ func (c *Client) Budgets(userID uint, from, to time.Time) ([]Budget, error) {
 
 	rows, err := conn.Query(ctx, BUDGETS_QUERY, userID, from, to)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperr.NoRows
+		}
 		return nil, lib.Ewrap("Couldn't get budgets data", err)
 	}
 
@@ -183,6 +187,9 @@ func (c *Client) BudgetByCategory(userID, categoryID uint, from, to time.Time) (
 	var result Budget
 	err = row.Scan(&result.ID, &result.CategoryID, &result.CategoryName, &result.LimitValue, &result.CurrentValue)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperr.NoRows
+		}
 		return nil, lib.Ewrap("Couldn't get budget data", err)
 	}
 

@@ -31,7 +31,7 @@ var (
 )
 
 // @title Finstat API
-// @version 0.9
+// @version 1.0
 // @description Веб-приложения для учета личных финансов
 // @termsOfService http://swagger.io/terms/
 
@@ -88,7 +88,7 @@ type IsUserValidFormat struct {
 	Password string `json:"password" binding:"omitempty"`
 }
 
-type AddTransactionFormat struct {
+type InsertTransactionFormat struct {
 	Amount      decimal.Decimal `json:"amount" binding:"required"`
 	CategoryID  uint            `json:"category_id" binding:"required,numeric"`
 	Description string          `json:"description" binding:"omitempty"`
@@ -119,7 +119,7 @@ type CategoryFormat struct {
 	Name string `json:"name" binding:"required"`
 }
 
-type AddBudgetFormat struct {
+type InsertBudgetFormat struct {
 	CategoryID uint            `json:"category_id" binding:"required"`
 	Limit      decimal.Decimal `json:"limit" binding:"required"`
 }
@@ -160,7 +160,7 @@ type BudgetResponse struct {
 	Result service.Budget `json:"result"`
 }
 
-func AddServer(host string, authService *service.AuthService, transactionsService *service.TransactionService, categoryService *service.CategoryService, budgetService *service.BudgetService) *Server {
+func InsertServer(host string, authService *service.AuthService, transactionsService *service.TransactionService, categoryService *service.CategoryService, budgetService *service.BudgetService) *Server {
 	return &Server{
 		host:               host,
 		authService:        authService,
@@ -325,9 +325,10 @@ func (s *Server) register(c *gin.Context) {
 
 	if err := s.authService.Register(data.Username, data.Password); err != nil {
 		log.Println(err)
-		if errors.Is(err, apperr.NotUnique) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Данное имя пользователя уже используется"})
-		} else {
+		switch {
+		case errors.Is(err, apperr.NotUnique):
+			c.JSON(http.StatusConflict, gin.H{"error": "Данное имя пользователя уже используется"})
+		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка регистрации пользователя"})
 		}
 		return
@@ -344,6 +345,7 @@ func (s *Server) register(c *gin.Context) {
 // @Param        	input body UserFormat true 		"Логин и пароль для авторизации"
 // @Success      	200								"Успешная авторизация"
 // @Failure      	400  {object}  ErrorResponse 	"Неверно заполнены поля"
+// @Failure      	400  {object}  ErrorResponse 	"Нверное имя пользователя или пароль"
 // @Failure      	500  {object}  ErrorResponse 	"Ошибка авторизации пользователя"
 // @Router       	/auth/login [post]
 func (s *Server) login(c *gin.Context) {
@@ -357,7 +359,12 @@ func (s *Server) login(c *gin.Context) {
 	access, refresh, err := s.authService.Login(data.Username, data.Password)
 	if err != nil {
 		log.Println(err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка авторизации пользователя"})
+		switch {
+		case errors.Is(err, apperr.NoRows):
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Нверное имя пользователя или пароль"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка авторизации пользователя"})
+		}
 		return
 	}
 
@@ -454,7 +461,7 @@ func (s *Server) logout(c *gin.Context) {
 // @Tags         	transactions
 // @Accept       	json
 // @Produce      	json
-// @Param        	input body AddTransactionFormat true "Информация о транзакции"
+// @Param        	input body InsertTransactionFormat true "Информация о транзакции"
 // @Success      	200								"Успешное создание транзакции"
 // @Failure      	400  {object}  ErrorResponse 	"Неверно заполнены поля"
 // @Failure      	401  {object}  ErrorResponse 	"Ошибка авторизации"
@@ -462,7 +469,7 @@ func (s *Server) logout(c *gin.Context) {
 // @Router       	/transactions [post]
 // @Security     	Auth
 func (s *Server) addTransaction(c *gin.Context) {
-	var data AddTransactionFormat
+	var data InsertTransactionFormat
 	if err := c.ShouldBindJSON(&data); err != nil {
 		log.Println(err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверно заполнены поля"})
@@ -478,7 +485,7 @@ func (s *Server) addTransaction(c *gin.Context) {
 
 	userID := c.GetUint(USER_ID_KEY)
 
-	_, err = s.transactionService.AddTransaction(userID, data.Amount, data.CategoryID, data.Description, date)
+	_, err = s.transactionService.InsertTransaction(userID, data.Amount, data.CategoryID, data.Description, date)
 	if err != nil {
 		log.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при создании транзакции"})
@@ -666,12 +673,13 @@ func (s *Server) addCategory(c *gin.Context) {
 
 	userID := c.GetUint(USER_ID_KEY)
 
-	id, err := s.categoryService.AddCategory(userID, data.Name)
+	id, err := s.categoryService.InsertCategory(userID, data.Name)
 	if err != nil {
 		log.Println(err)
-		if errors.Is(err, apperr.NotUnique) {
+		switch {
+		case errors.Is(err, apperr.NotUnique):
 			c.JSON(http.StatusConflict, gin.H{"error": "Категория с таким именем уже есть"})
-		} else {
+		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при создании категории"})
 		}
 		return
@@ -795,7 +803,7 @@ func (s *Server) categories(c *gin.Context) {
 // @Tags         	budgets
 // @Accept       	json
 // @Produce      	json
-// @Param        	input body AddBudgetFormat true "Категория и лимит"
+// @Param        	input body InsertBudgetFormat true "Категория и лимит"
 // @Success      	200								"Успешное создание бюджета"
 // @Failure      	400  {object}  ErrorResponse 	"Неверно заполнены поля"
 // @Failure      	401  {object}  ErrorResponse 	"Ошибка авторизации"
@@ -804,7 +812,7 @@ func (s *Server) categories(c *gin.Context) {
 // @Router       	/budgets [post]
 // @Security     	Auth
 func (s *Server) addBudget(c *gin.Context) {
-	var data AddBudgetFormat
+	var data InsertBudgetFormat
 	if err := c.ShouldBindJSON(&data); err != nil {
 		log.Println(err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Неверно заполнены поля"})
@@ -813,11 +821,12 @@ func (s *Server) addBudget(c *gin.Context) {
 
 	userID := c.GetUint(USER_ID_KEY)
 
-	if err := s.budgetService.AddBudget(userID, data.CategoryID, data.Limit); err != nil {
+	if err := s.budgetService.InsertBudget(userID, data.CategoryID, data.Limit); err != nil {
 		log.Println(err)
-		if errors.Is(err, apperr.NotUnique) {
+		switch {
+		case errors.Is(err, apperr.NotUnique):
 			c.JSON(http.StatusConflict, gin.H{"error": "Бюджет с данной категорией уже существует"})
-		} else {
+		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при создании бюджета"})
 		}
 		return
@@ -922,6 +931,7 @@ func (s *Server) deleteBudget(c *gin.Context) {
 // @Success      	200  {object}  BudgetsResponse 			"Успешное получение бюджетов"
 // @Failure      	400  {object}  ErrorResponse 			"Неверно заполнена дата"
 // @Failure      	401  {object}  ErrorResponse 			"Ошибка авторизации"
+// @Failure      	404  {object}  ErrorResponse 			"Бюджеты отсутствуют"
 // @Failure      	500  {object}  ErrorResponse 			"Ошибка при получении бюджетов"
 // @Router       	/budgets [get]
 // @Security     	Auth
@@ -946,7 +956,12 @@ func (s *Server) budgets(c *gin.Context) {
 
 	if err != nil {
 		log.Println(err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при получении бюджетов"})
+		switch {
+		case errors.Is(err, apperr.NoRows):
+			c.JSON(http.StatusNotFound, gin.H{"error": "Бюджеты отсутствуют"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при получении бюджетов"})
+		}
 		return
 	}
 
@@ -963,6 +978,7 @@ func (s *Server) budgets(c *gin.Context) {
 // @Success      	200  {object}  BudgetResponse 			"Успешное получение бюджетов"
 // @Failure      	400  {object}  ErrorResponse 			"Неверно заполнена дата"
 // @Failure      	401  {object}  ErrorResponse 			"Ошибка авторизации"
+// @Failure      	404  {object}  ErrorResponse 			"Бюджет с данной категорией отсутствует"
 // @Failure      	500  {object}  ErrorResponse 			"Ошибка при получении бюджетов"
 // @Router       	/budgets/category/{id} [get]
 // @Security     	Auth
@@ -995,7 +1011,12 @@ func (s *Server) budgetByCategory(c *gin.Context) {
 
 	if err != nil {
 		log.Println(err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при получении бюджетов"})
+		switch {
+		case errors.Is(err, apperr.NoRows):
+			c.JSON(http.StatusNotFound, gin.H{"error": "Бюджет с данной категорией отсутствует"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка при получении бюджетов"})
+		}
 		return
 	}
 

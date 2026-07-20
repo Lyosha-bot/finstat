@@ -10,7 +10,7 @@ import (
 type Transaction = repository.Transaction
 
 type TransactionRepo interface {
-	AddTransaction(userID uint, value decimal.Decimal, categoryID uint, description string, date time.Time) (uint, error)
+	InsertTransaction(userID uint, value decimal.Decimal, categoryID uint, description string, date time.Time) (uint, error)
 	UpdateTransaction(userID uint, transactionID uint, newValue decimal.Decimal, newCategoryID uint, newDescription string, newDate time.Time) (bool, error)
 	DeleteTransaction(userID uint, transactionID uint) (bool, error)
 	Transactions(userID, limit, page uint, from, to *time.Time, transactionType int, categories []uint) ([]Transaction, error)
@@ -26,8 +26,8 @@ func NewTransactionService(repo TransactionRepo) *TransactionService {
 	}
 }
 
-func (s *TransactionService) AddTransaction(userID uint, value decimal.Decimal, categoryID uint, description string, date time.Time) (uint, error) {
-	return s.repo.AddTransaction(userID, value, categoryID, description, date)
+func (s *TransactionService) InsertTransaction(userID uint, value decimal.Decimal, categoryID uint, description string, date time.Time) (uint, error) {
+	return s.repo.InsertTransaction(userID, value, categoryID, description, date)
 }
 
 func (s *TransactionService) UpdateTransaction(userID uint, transactionID uint, newValue decimal.Decimal, newCategoryID uint, newDescription string, newDate time.Time) (bool, error) {

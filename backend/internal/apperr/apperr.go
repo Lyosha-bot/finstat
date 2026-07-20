@@ -4,7 +4,7 @@ import "errors"
 
 var (
 	NotUnique = errors.New("not unique row")
-	NoRow     = errors.New("no row")
+	NoRows    = errors.New("no row")
 
 	ShortString = errors.New("short string")
 

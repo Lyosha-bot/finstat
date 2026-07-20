@@ -10,7 +10,7 @@ import (
 type Budget = repository.Budget
 
 type BudgetRepo interface {
-	AddBudget(userID, categoryID uint, limit decimal.Decimal) error
+	InsertBudget(userID, categoryID uint, limit decimal.Decimal) error
 	UpdateBudget(userID, budgetID uint, newLimit decimal.Decimal) (bool, error)
 	DeleteBudget(userID, budgetID uint) (bool, error)
 	Budgets(userID uint, from, to time.Time) ([]Budget, error)
@@ -33,8 +33,8 @@ func NewBudgetService(repo BudgetRepo) *BudgetService {
 	}
 }
 
-func (s *BudgetService) AddBudget(userID, categoryID uint, limit decimal.Decimal) error {
-	return s.repo.AddBudget(userID, categoryID, limit)
+func (s *BudgetService) InsertBudget(userID, categoryID uint, limit decimal.Decimal) error {
+	return s.repo.InsertBudget(userID, categoryID, limit)
 }
 
 func (s *BudgetService) UpdateBudget(userID, budgetID uint, newLimit decimal.Decimal) (bool, error) {
