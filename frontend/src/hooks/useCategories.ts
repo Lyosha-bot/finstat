@@ -31,20 +31,20 @@ export function useCategories() {
     fetchCategories()
   }, [fetchCategories])
 
-  const addCategory = async (payload: CreateCategoryPayload) => {
+  const addCategory = useCallback(async (payload: CreateCategoryPayload) => {
     await createCategory(payload)
     await fetchCategories()
-  }
+  }, [fetchCategories])
 
-  const editCategory = async (id: number, payload: UpdateCategoryPayload) => {
+  const editCategory = useCallback(async (id: number, payload: UpdateCategoryPayload) => {
     await updateCategory(id, payload)
     await fetchCategories()
-  }
+  }, [fetchCategories])
 
-  const removeCategory = async (id: number) => {
+  const removeCategory = useCallback(async (id: number) => {
     await deleteCategory(id)
     await fetchCategories()
-  }
+  }, [fetchCategories])
 
   return {
     categories,

@@ -1,104 +1,148 @@
 import { useState } from 'react'
-import { useCategories } from '../hooks/useCategories'
+import { SYSTEM_CATEGORIES } from '../constants'
+import type { Category, CreateCategoryPayload, UpdateCategoryPayload } from '../api/categories'
 
 interface CategoryManagerModalProps {
   isOpen: boolean
   onClose: () => void
+  categories: Category[]
+  onAddCategory: (payload: CreateCategoryPayload) => Promise<void>
+  onEditCategory: (id: number, payload: UpdateCategoryPayload) => Promise<void>
+  onDeleteCategory: (id: number) => Promise<void>
+  onConfirm: (message: string, onConfirm?: () => void) => void
 }
 
-export const CategoryManagerModal = ({ isOpen, onClose }: CategoryManagerModalProps) => {
-  const { categories, addCategory, editCategory, removeCategory } = useCategories()
+export const CategoryManagerModal = ({
+  isOpen,
+  onClose,
+  categories = [],
+  onAddCategory,
+  onEditCategory,
+  onDeleteCategory,
+  onConfirm,
+}: CategoryManagerModalProps) => {
   const [newCategoryName, setNewCategoryName] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editingName, setEditingName] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const userCategories = categories.filter(c => !SYSTEM_CATEGORIES.includes(c.name))
+
+  if (!isOpen) return null
 
   const handleAdd = async () => {
     if (newCategoryName.trim().length < 3) {
-      alert('Название категории должно содержать минимум 3 символа')
+      setError('Название должно быть минимум 3 символа')
       return
     }
+    setLoading(true)
+    setError('')
     try {
-      await addCategory({ name: newCategoryName.trim() })
+      await onAddCategory({ name: newCategoryName.trim() })
       setNewCategoryName('')
     } catch (err: any) {
-      alert(err.message)
+      setError(err.message)
+    } finally {
+      setLoading(false)
     }
-  }
-
-  const handleEdit = (id: number, name: string) => {
-    setEditingId(id)
-    setEditingName(name)
   }
 
   const handleSaveEdit = async () => {
     if (editingName.trim().length < 3) {
-      alert('Название категории должно содержать минимум 3 символа')
+      setError('Название должно быть минимум 3 символа')
       return
     }
+    setLoading(true)
+    setError('')
     try {
-      await editCategory(editingId!, { name: editingName.trim() })
+      await onEditCategory(editingId!, { name: editingName.trim() })
       setEditingId(null)
       setEditingName('')
     } catch (err: any) {
-      alert(err.message)
+      setError(err.message)
+    } finally {
+      setLoading(false)
     }
   }
 
-  const handleDelete = async (id: number) => {
-    if (window.confirm('Удалить категорию?')) {
+  const handleDelete = (id: number) => {
+    onConfirm('Удалить категорию?', async () => {
+      setLoading(true)
       try {
-        await removeCategory(id)
+        await onDeleteCategory(id)
       } catch (err: any) {
-        alert(err.message)
+        setError(err.message)
+      } finally {
+        setLoading(false)
       }
-    }
+    })
   }
-
-  if (!isOpen) return null
 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
         <h2>Управление категориями</h2>
-        <div className="form-group" style={{ display: 'flex', gap: '0.5rem' }}>
-          <input
-            type="text"
-            value={newCategoryName}
-            onChange={(e) => setNewCategoryName(e.target.value)}
-            placeholder="Название новой категории (мин. 3 символа)"
-            style={{ flex: 1 }}
-          />
-          <button className="btn btn-primary" onClick={handleAdd}>Добавить</button>
+        <div className="form-group">
+          <label>Новая категория</label>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <input
+              type="text"
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+              placeholder="Название (мин. 3 символа)"
+              style={{ flex: 1 }}
+            />
+            <button className="btn btn-primary" onClick={handleAdd} disabled={loading}>
+              Добавить
+            </button>
+          </div>
         </div>
-        <div style={{ marginTop: '1rem', maxHeight: '300px', overflowY: 'auto' }}>
-          {categories.map(cat => (
-            <div key={cat.id} className="category-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.4rem 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-              {editingId === cat.id ? (
-                <input
-                  type="text"
-                  value={editingName}
-                  onChange={(e) => setEditingName(e.target.value)}
-                  autoFocus
-                  style={{ flex: 1, marginRight: '0.5rem' }}
-                />
-              ) : (
-                <span>{cat.name}</span>
-              )}
-              <div style={{ display: 'flex', gap: '0.3rem' }}>
+        {error && <p className="error-text">{error}</p>}
+        <div style={{ marginTop: '1.5rem', maxHeight: '300px', overflowY: 'auto' }}>
+          <h3>Мои категории</h3>
+          {userCategories.length === 0 ? (
+            <p>Нет пользовательских категорий</p>
+          ) : (
+            userCategories.map(cat => (
+              <div
+                key={cat.id}
+                className="category-item"
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '0.4rem 0',
+                  borderBottom: '1px solid rgba(255,255,255,0.06)',
+                }}
+              >
                 {editingId === cat.id ? (
-                  <>
-                    <button className="btn btn-primary" onClick={handleSaveEdit}>Сохранить</button>
-                    <button className="btn btn-secondary" onClick={() => { setEditingId(null); setEditingName('') }}>Отмена</button>
-                  </>
+                  <input
+                    type="text"
+                    value={editingName}
+                    onChange={(e) => setEditingName(e.target.value)}
+                    autoFocus
+                    style={{ flex: 1, marginRight: '0.5rem' }}
+                  />
                 ) : (
-                  <>
-                    <button className="btn-edit" onClick={() => handleEdit(cat.id, cat.name)}>✏️</button>
-                    <button className="btn-delete" onClick={() => handleDelete(cat.id)}>🗑️</button>
-                  </>
+                  <span>{cat.name}</span>
                 )}
+                <div style={{ display: 'flex', gap: '0.3rem' }}>
+                  {editingId === cat.id ? (
+                    <>
+                      <button className="btn btn-primary" onClick={handleSaveEdit} disabled={loading}>Сохранить</button>
+                      <button className="btn btn-secondary" onClick={() => { setEditingId(null); setEditingName('') }}>Отмена</button>
+                    </>
+                  ) : (
+                    <>
+                      <button className="btn-edit" onClick={() => { setEditingId(cat.id); setEditingName(cat.name) }} disabled={loading}>✏️</button>
+                      <button className="btn-delete" onClick={() => handleDelete(cat.id)} disabled={loading}>🗑️</button>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
         <div className="modal-actions">
           <button className="btn btn-secondary" onClick={onClose}>Закрыть</button>

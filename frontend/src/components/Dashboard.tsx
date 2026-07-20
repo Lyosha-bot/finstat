@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import type { Transaction } from '../types'
 import { useTransactions } from '../hooks/useTransactions'
 import { useCategories } from '../hooks/useCategories'
@@ -20,60 +20,58 @@ interface DashboardProps {
   onLogout: () => void
 }
 
-export const Dashboard = ({ username, onLogout }: DashboardProps) => {
+export const Dashboard = React.memo(({ username, onLogout }: DashboardProps) => {
   // ===== Категории =====
-  const { categories, loading: categoriesLoading } = useCategories()
+  const { categories, addCategory, editCategory, removeCategory } = useCategories()
   const [showCategoryManagerModal, setShowCategoryManagerModal] = useState(false)
 
-  // ===== Бюджеты =====
+  // ===== Бюджеты (получаем refetch) =====
   const currentDate = new Date().toISOString().split('T')[0]
-  const { budgets, loading: budgetsLoading, error: budgetsError, addBudget, removeBudget, editBudget } = useBudgets(currentDate)
+  const { budgets, loading: budgetsLoading, error: budgetsError, addBudget, removeBudget, editBudget, refetch: refetchBudgets } = useBudgets(currentDate)
 
   // ===== Модалка подтверждения =====
-  const [showConfirmModal, setShowConfirmModal] = useState(false)
-  const [confirmMessage, setConfirmMessage] = useState('')
-  const [confirmCallback, setConfirmCallback] = useState<(() => void) | null>(null)
+  const [confirmState, setConfirmState] = useState<{
+    show: boolean
+    message: string
+    onConfirm?: () => void
+    isError?: boolean
+  }>({ show: false, message: '', isError: false })
 
-  const openConfirm = (message: string, onConfirm: () => void) => {
-    setConfirmMessage(message)
-    setConfirmCallback(() => onConfirm)
-    setShowConfirmModal(true)
-  }
+  const openConfirm = useCallback((message: string, onConfirm?: () => void, isError = false) => {
+    setConfirmState({ show: true, message, onConfirm, isError })
+  }, [])
 
-  const handleConfirm = () => {
-    if (confirmCallback) confirmCallback()
-    setShowConfirmModal(false)
-    setConfirmCallback(null)
-  }
+  const handleConfirm = useCallback(() => {
+    if (confirmState.onConfirm) confirmState.onConfirm()
+    setConfirmState({ show: false, message: '', isError: false })
+  }, [confirmState])
 
   // ===== Модалка редактирования бюджета =====
-  const [showEditBudgetModal, setShowEditBudgetModal] = useState(false)
-  const [editBudgetId, setEditBudgetId] = useState<number | null>(null)
-  const [editBudgetLimit, setEditBudgetLimit] = useState('')
+  const [editBudgetState, setEditBudgetState] = useState<{ show: boolean; id: number | null; limit: string }>({
+    show: false,
+    id: null,
+    limit: '',
+  })
 
-  const openEditBudget = (id: number, currentLimit: number) => {
-    setEditBudgetId(id)
-    setEditBudgetLimit(String(currentLimit))
-    setShowEditBudgetModal(true)
-  }
+  const openEditBudget = useCallback((id: number, currentLimit: number) => {
+    setEditBudgetState({ show: true, id, limit: String(currentLimit) })
+  }, [])
 
-  const handleEditBudgetSubmit = async () => {
-    const newLimit = parseFloat(editBudgetLimit)
+  const handleEditBudgetSubmit = useCallback(async () => {
+    const newLimit = parseFloat(editBudgetState.limit)
     if (isNaN(newLimit) || newLimit <= 0) {
-      alert('Введите корректное число')
+      openConfirm('Введите корректное число', undefined, true)
       return
     }
-    if (editBudgetId !== null) {
+    if (editBudgetState.id !== null) {
       try {
-        await editBudget(editBudgetId, { limit: newLimit })
-        setShowEditBudgetModal(false)
-        setEditBudgetId(null)
-        setEditBudgetLimit('')
+        await editBudget(editBudgetState.id, { limit: newLimit })
+        setEditBudgetState({ show: false, id: null, limit: '' })
       } catch (err: any) {
-        alert(err.message)
+        openConfirm(err.message || 'Ошибка обновления', undefined, true)
       }
     }
-  }
+  }, [editBudgetState, editBudget, openConfirm])
 
   // ===== Фильтры =====
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all')
@@ -83,12 +81,8 @@ export const Dashboard = ({ username, onLogout }: DashboardProps) => {
   const [statsDateFrom, setStatsDateFrom] = useState('')
   const [statsDateTo, setStatsDateTo] = useState('')
 
-  // ===== Параметры для API =====
   const apiParams = useMemo(() => {
-    const params: any = {
-      limit: 1000,
-      page: 1,
-    }
+    const params: any = { limit: 1000, page: 1 }
     const now = new Date()
     if (periodFilter === 'today') {
       params.from = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString().split('T')[0]
@@ -106,9 +100,7 @@ export const Dashboard = ({ username, onLogout }: DashboardProps) => {
     }
     if (filterType === 'income') params.type = 1
     else if (filterType === 'expense') params.type = -1
-    if (filterCategory !== 'all') {
-      params.categories = [filterCategory]
-    }
+    if (filterCategory !== 'all') params.categories = [filterCategory]
     return params
   }, [periodFilter, filterType, filterCategory])
 
@@ -129,10 +121,10 @@ export const Dashboard = ({ username, onLogout }: DashboardProps) => {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
 
   // ===== Форма транзакции =====
-  const getDefaultCategoryId = () => {
+  const getDefaultCategoryId = useCallback(() => {
     if (categories.length > 0) return categories[0].id
     return 0
-  }
+  }, [categories])
 
   const [formData, setFormData] = useState({
     description: '',
@@ -146,14 +138,12 @@ export const Dashboard = ({ username, onLogout }: DashboardProps) => {
     if (categories.length > 0 && formData.category === 0) {
       setFormData(prev => ({ ...prev, category: categories[0].id }))
     }
-  }, [categories])
+  }, [categories, formData.category])
 
-  // ===== Вычисляемые данные =====
+  // ===== Вычисления =====
   const filteredBySearch = useMemo(() => {
     if (!searchQuery.trim()) return transactions
-    return transactions.filter(t =>
-      t.description.toLowerCase().includes(searchQuery.toLowerCase())
-    )
+    return transactions.filter(t => t.description.toLowerCase().includes(searchQuery.toLowerCase()))
   }, [transactions, searchQuery])
 
   const grouped = useMemo(() => {
@@ -171,7 +161,6 @@ export const Dashboard = ({ username, onLogout }: DashboardProps) => {
       }))
   }, [filteredBySearch])
 
-  // ===== Статистика =====
   const statsData = useMemo(() => {
     let filtered = [...transactions]
     if (statsDateFrom) filtered = filtered.filter(t => t.date >= statsDateFrom)
@@ -183,7 +172,7 @@ export const Dashboard = ({ username, onLogout }: DashboardProps) => {
   const totalExpense = statsData.filter(t => t.value < 0).reduce((s, t) => s + t.value, 0)
   const balance = totalIncome + totalExpense
 
-  const getIncomeCategoryStats = () => {
+  const incomeStats = useMemo(() => {
     const map: Record<number, number> = {}
     statsData.filter(t => t.value > 0).forEach(t => {
       map[t.category_id] = (map[t.category_id] || 0) + t.value
@@ -194,9 +183,9 @@ export const Dashboard = ({ username, onLogout }: DashboardProps) => {
         return [cat ? cat.name : 'Без категории', amount] as [string, number]
       })
       .sort((a, b) => b[1] - a[1])
-  }
+  }, [statsData, categories])
 
-  const getExpenseCategoryStats = () => {
+  const expenseStats = useMemo(() => {
     const map: Record<number, number> = {}
     statsData.filter(t => t.value < 0).forEach(t => {
       map[t.category_id] = (map[t.category_id] || 0) + t.value
@@ -207,9 +196,9 @@ export const Dashboard = ({ username, onLogout }: DashboardProps) => {
         return [cat ? cat.name : 'Без категории', Math.abs(amount)] as [string, number]
       })
       .sort((a, b) => b[1] - a[1])
-  }
+  }, [statsData, categories])
 
-  const getMonthlyStats = () => {
+  const monthlyStats = useMemo(() => {
     const months: Record<string, { income: number; expense: number }> = {}
     statsData.forEach(t => {
       const m = new Date(t.date).toLocaleString('ru-RU', { month: 'short', year: 'numeric' })
@@ -218,9 +207,9 @@ export const Dashboard = ({ username, onLogout }: DashboardProps) => {
       else months[m].expense += Math.abs(t.value)
     })
     return Object.entries(months).sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime())
-  }
+  }, [statsData])
 
-  const getCumulativeBalance = () => {
+  const cumulative = useMemo(() => {
     const dailyMap: Record<string, number> = {}
     statsData.forEach(t => {
       dailyMap[t.date] = (dailyMap[t.date] || 0) + t.value
@@ -233,16 +222,16 @@ export const Dashboard = ({ username, onLogout }: DashboardProps) => {
       result.push({ label: date, value: cum })
     })
     return result
-  }
+  }, [statsData])
 
-  const getAverageDaily = () => {
+  const avgDaily = useMemo(() => {
     const days = new Set(statsData.map(t => t.date)).size || 1
     const totalInc = statsData.filter(t => t.value > 0).reduce((s, t) => s + t.value, 0)
     const totalExp = statsData.filter(t => t.value < 0).reduce((s, t) => s + t.value, 0)
     return { avgIncome: totalInc / days, avgExpense: Math.abs(totalExp) / days }
-  }
+  }, [statsData])
 
-  const getWeekdayStats = () => {
+  const weekdayStats = useMemo(() => {
     const weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
     const map: Record<string, number> = { Пн: 0, Вт: 0, Ср: 0, Чт: 0, Пт: 0, Сб: 0, Вс: 0 }
     statsData.filter(t => t.value < 0).forEach(t => {
@@ -253,30 +242,23 @@ export const Dashboard = ({ username, onLogout }: DashboardProps) => {
       map[name] = (map[name] || 0) + Math.abs(t.value)
     })
     return Object.entries(map).map(([name, value]) => ({ name, value }))
-  }
-
-  const incomeStats = getIncomeCategoryStats()
-  const expenseStats = getExpenseCategoryStats()
-  const monthlyStats = getMonthlyStats()
-  const cumulative = getCumulativeBalance()
-  const avgDaily = getAverageDaily()
-  const weekdayStats = getWeekdayStats()
+  }, [statsData])
 
   const maxIncome = incomeStats.length ? incomeStats[0][1] : 1
   const maxExpense = expenseStats.length ? expenseStats[0][1] : 1
   const maxMonthly = monthlyStats.reduce((max, [_, { income, expense }]) => Math.max(max, income, expense), 1)
   const maxWeekday = weekdayStats.reduce((max, { value }) => Math.max(max, value), 1)
 
-  // ===== Обработчики =====
-  const handleAddTransaction = async (e: React.FormEvent) => {
+  // ===== Обработчики транзакций =====
+  const handleAddTransaction = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
     const amount = parseFloat(formData.amount)
     if (!formData.description || isNaN(amount) || amount <= 0) {
-      alert('Заполните поля корректно')
+      openConfirm('Заполните поля корректно', undefined, true)
       return
     }
     if (!formData.category) {
-      alert('Выберите категорию')
+      openConfirm('Выберите категорию', undefined, true)
       return
     }
     const payload = {
@@ -287,6 +269,7 @@ export const Dashboard = ({ username, onLogout }: DashboardProps) => {
     }
     try {
       await addTransactionApi(payload)
+      await refetchBudgets()
       setFormData({
         description: '',
         amount: '',
@@ -296,11 +279,11 @@ export const Dashboard = ({ username, onLogout }: DashboardProps) => {
       })
       setShowAddModal(false)
     } catch (err: any) {
-      alert(err.message)
+      openConfirm(err.message || 'Ошибка создания', undefined, true)
     }
-  }
+  }, [formData, addTransactionApi, categories, openConfirm, refetchBudgets])
 
-  const handleEditTransaction = (transaction: Transaction) => {
+  const handleEditTransaction = useCallback((transaction: Transaction) => {
     setEditingTransaction(transaction)
     setFormData({
       description: transaction.description,
@@ -310,17 +293,17 @@ export const Dashboard = ({ username, onLogout }: DashboardProps) => {
       date: transaction.date,
     })
     setShowAddModal(true)
-  }
+  }, [])
 
-  const handleUpdateTransaction = async (e: React.FormEvent) => {
+  const handleUpdateTransaction = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
     const amount = parseFloat(formData.amount)
     if (!formData.description || isNaN(amount) || amount <= 0) {
-      alert('Заполните поля корректно')
+      openConfirm('Заполните поля корректно', undefined, true)
       return
     }
     if (!formData.category) {
-      alert('Выберите категорию')
+      openConfirm('Выберите категорию', undefined, true)
       return
     }
     if (!editingTransaction) return
@@ -332,6 +315,7 @@ export const Dashboard = ({ username, onLogout }: DashboardProps) => {
     }
     try {
       await updateTransactionApi(editingTransaction.id, payload)
+      await refetchBudgets()
       setEditingTransaction(null)
       setFormData({
         description: '',
@@ -342,37 +326,57 @@ export const Dashboard = ({ username, onLogout }: DashboardProps) => {
       })
       setShowAddModal(false)
     } catch (err: any) {
-      alert(err.message)
+      openConfirm(err.message || 'Ошибка обновления', undefined, true)
     }
-  }
+  }, [formData, editingTransaction, updateTransactionApi, categories, openConfirm, refetchBudgets])
 
-  const handleDeleteTransaction = (id: number) => {
+  const handleDeleteTransaction = useCallback((id: number) => {
     openConfirm('Удалить транзакцию?', async () => {
       try {
         await deleteTransactionApi(id)
+        await refetchBudgets()
       } catch (err: any) {
-        alert(err.message)
+        openConfirm(err.message || 'Ошибка удаления', undefined, true)
       }
     })
-  }
+  }, [deleteTransactionApi, openConfirm, refetchBudgets])
 
-  const handleCreateBudget = async (payload: { category_id: number; limit: number }) => {
-    await addBudget(payload)
-  }
+  // ===== Обработчики бюджетов =====
+  const handleCreateBudget = useCallback(async (payload: { category_id: number; limit: number }) => {
+    try {
+      await addBudget(payload)
+    } catch (err: any) {
+      openConfirm(err.message || 'Ошибка создания бюджета', undefined, true)
+    }
+  }, [addBudget, openConfirm])
 
-  const handleDeleteBudget = (id: number) => {
+  const handleDeleteBudget = useCallback((id: number) => {
     openConfirm('Удалить бюджет?', async () => {
       try {
         await removeBudget(id)
       } catch (err: any) {
-        alert(err.message)
+        openConfirm(err.message || 'Ошибка удаления бюджета', undefined, true)
       }
     })
-  }
+  }, [removeBudget, openConfirm])
 
-  const handleEditBudget = (id: number, currentLimit: number) => {
+  const handleEditBudget = useCallback((id: number, currentLimit: number) => {
     openEditBudget(id, currentLimit)
-  }
+  }, [openEditBudget])
+
+  // ===== Обработчики категорий =====
+  const handleAddCategory = useCallback(async (payload: { name: string }) => {
+    await addCategory(payload)
+  }, [addCategory])
+
+  const handleEditCategory = useCallback(async (id: number, payload: { name: string }) => {
+    await editCategory(id, payload)
+  }, [editCategory])
+
+  const handleDeleteCategory = useCallback(async (id: number) => {
+    await removeCategory(id)
+    await refetchBudgets() // обновляем бюджеты после удаления категории
+  }, [removeCategory, refetchBudgets])
 
   // ===== Рендер =====
   return (
@@ -440,10 +444,11 @@ export const Dashboard = ({ username, onLogout }: DashboardProps) => {
         <StatsDashboard
           incomeStats={incomeStats}
           expenseStats={expenseStats}
-          budgetStats={budgets.map(b => {
-            const spent = Math.abs(b.current_value)
-            return { ...b, spent, percent: Math.min((spent / b.limit_value) * 100, 100) }
-          })}
+          budgetStats={budgets.map(b => ({
+            ...b,
+            spent: Math.abs(b.current_value),
+            percent: Math.min((Math.abs(b.current_value) / b.limit_value) * 100, 100),
+          }))}
           cumulative={cumulative}
           avgDaily={avgDaily}
           weekdayStats={weekdayStats}
@@ -479,29 +484,39 @@ export const Dashboard = ({ username, onLogout }: DashboardProps) => {
         onCreateBudget={handleCreateBudget}
       />
 
-      {/* ===== Модалка управления категориями ===== */}
       <CategoryManagerModal
         isOpen={showCategoryManagerModal}
         onClose={() => setShowCategoryManagerModal(false)}
+        categories={categories}
+        onAddCategory={handleAddCategory}
+        onEditCategory={handleEditCategory}
+        onDeleteCategory={handleDeleteCategory}
+        onConfirm={openConfirm}
       />
 
-      {/* ===== Модалка подтверждения ===== */}
-      {showConfirmModal && (
-        <div className="modal-overlay" onClick={() => setShowConfirmModal(false)}>
+      {/* Модалка подтверждения / ошибки */}
+      {confirmState.show && (
+        <div className="modal-overlay" onClick={() => setConfirmState({ show: false, message: '', isError: false })}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2>Подтверждение</h2>
-            <p style={{ marginBottom: '1.5rem' }}>{confirmMessage}</p>
+            <h2>{confirmState.isError ? 'Ошибка' : 'Подтверждение'}</h2>
+            <p style={{ marginBottom: '1.5rem' }}>{confirmState.message}</p>
             <div className="modal-actions">
-              <button className="btn btn-primary" onClick={handleConfirm}>Да</button>
-              <button className="btn btn-secondary" onClick={() => setShowConfirmModal(false)}>Отмена</button>
+              <button className="btn btn-primary" onClick={handleConfirm}>
+                {confirmState.isError ? 'ОК' : 'Да'}
+              </button>
+              {!confirmState.isError && (
+                <button className="btn btn-secondary" onClick={() => setConfirmState({ show: false, message: '', isError: false })}>
+                  Отмена
+                </button>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* ===== Модалка редактирования бюджета ===== */}
-      {showEditBudgetModal && (
-        <div className="modal-overlay" onClick={() => setShowEditBudgetModal(false)}>
+      {/* Модалка редактирования бюджета */}
+      {editBudgetState.show && (
+        <div className="modal-overlay" onClick={() => setEditBudgetState({ show: false, id: null, limit: '' })}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h2>Редактировать лимит</h2>
             <div className="form-group">
@@ -510,19 +525,19 @@ export const Dashboard = ({ username, onLogout }: DashboardProps) => {
                 type="number"
                 step="0.01"
                 min="0.01"
-                value={editBudgetLimit}
-                onChange={(e) => setEditBudgetLimit(e.target.value)}
+                value={editBudgetState.limit}
+                onChange={(e) => setEditBudgetState(prev => ({ ...prev, limit: e.target.value }))}
                 placeholder="15000"
                 autoFocus
               />
             </div>
             <div className="modal-actions">
               <button className="btn btn-primary" onClick={handleEditBudgetSubmit}>Сохранить</button>
-              <button className="btn btn-secondary" onClick={() => setShowEditBudgetModal(false)}>Отмена</button>
+              <button className="btn btn-secondary" onClick={() => setEditBudgetState({ show: false, id: null, limit: '' })}>Отмена</button>
             </div>
           </div>
         </div>
       )}
     </div>
   )
-}
+})

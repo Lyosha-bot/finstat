@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   getBudgets,
   createBudget,
@@ -14,13 +14,14 @@ export function useBudgets(date: string) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchBudgets = async () => {
+  const fetchBudgets = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
       const data = await getBudgets(date)
       const parsed = data.result.map(b => ({
         ...b,
+        name: b.category_name,
         limit_value: typeof b.limit_value === 'string' ? parseFloat(b.limit_value) : b.limit_value,
         current_value: typeof b.current_value === 'string' ? parseFloat(b.current_value) : b.current_value,
       }))
@@ -30,28 +31,28 @@ export function useBudgets(date: string) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [date])
 
   useEffect(() => {
     fetchBudgets()
-  }, [date])
+  }, [fetchBudgets])
 
-  const addBudget = async (payload: CreateBudgetPayload) => {
+  const addBudget = useCallback(async (payload: CreateBudgetPayload) => {
     await createBudget(payload)
     await fetchBudgets()
-  }
+  }, [fetchBudgets])
 
-  const removeBudget = async (id: number) => {
+  const removeBudget = useCallback(async (id: number) => {
     await deleteBudget(id)
     await fetchBudgets()
-  }
+  }, [fetchBudgets])
 
-    const editBudget = async (id: number, payload: UpdateBudgetPayload) => {
+  const editBudget = useCallback(async (id: number, payload: UpdateBudgetPayload) => {
     await updateBudget(id, payload)
     await fetchBudgets()
-  }
+  }, [fetchBudgets])
 
-    return {
+  return {
     budgets,
     loading,
     error,
@@ -60,5 +61,4 @@ export function useBudgets(date: string) {
     editBudget,
     refetch: fetchBudgets,
   }
-
 }

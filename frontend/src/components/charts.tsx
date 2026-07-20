@@ -2,7 +2,7 @@ import { formatMoney, formatDate } from '../utils/format'
 
 // ----- Линейный график -----
 export const LineChart = ({ data, labels, colors, max }: { data: number[][]; labels: string[]; colors: string[]; max: number }) => {
-  const padding = { top: 30, bottom: 30, left: 60, right: 20 }
+  const padding = { top: 30, bottom: 30, left: 60, right: 40 } // увеличен правый отступ
   const width = 600
   const height = 250
   const innerWidth = width - padding.left - padding.right
@@ -24,7 +24,11 @@ export const LineChart = ({ data, labels, colors, max }: { data: number[][]; lab
   )
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: 'auto' }}>
+    <svg 
+      viewBox={`0 0 ${width} ${height}`} 
+      preserveAspectRatio="none"
+      style={{ width: '100%', height: '100%' }}
+    >
       {Array.from({ length: steps + 1 }, (_, i) => {
         const y = padding.top + innerHeight - (i / steps) * innerHeight
         const val = (i / steps) * maxScaled
@@ -63,7 +67,7 @@ export const LineChart = ({ data, labels, colors, max }: { data: number[][]; lab
 
 // ----- Накопленный баланс -----
 export const CumulativeChart = ({ data }: { data: { label: string; value: number }[] }) => {
-  const padding = { top: 30, bottom: 30, left: 60, right: 20 }
+  const padding = { top: 30, bottom: 30, left: 60, right: 40 } // увеличен правый отступ
   const width = 600
   const height = 180
   const innerWidth = width - padding.left - padding.right
@@ -91,7 +95,11 @@ export const CumulativeChart = ({ data }: { data: { label: string; value: number
   }
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: 'auto' }}>
+    <svg 
+      viewBox={`0 0 ${width} ${height}`} 
+      preserveAspectRatio="none"
+      style={{ width: '100%', height: '100%' }}
+    >
       {yValues.map((val) => {
         const y = centerY - (val / maxScaled) * (innerHeight / 2)
         if (Math.abs(val) < 0.001) return null
