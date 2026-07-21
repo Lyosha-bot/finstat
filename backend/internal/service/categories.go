@@ -2,26 +2,16 @@ package service
 
 import (
 	"finstat/internal/lib"
+	"finstat/internal/models"
 	"finstat/internal/repository"
 )
 
-type Category = repository.Category
-
-type CategoryRepo interface {
-	InsertCategory(userID uint, categoryName string) (uint, error)
-	UpdateCategory(userID, categoryID uint, newCategoryName string) (bool, error)
-	DeleteCategory(userID, categoryID uint) (bool, error)
-	SystemCategories() ([]Category, error)
-	UserCategories(userID uint) ([]Category, error)
-	Categories(userID uint) ([]Category, error)
-}
-
 type CategoryService struct {
-	repo             CategoryRepo
-	systemCategories []Category
+	repo             repository.Category
+	systemCategories []models.Category
 }
 
-func NewCategoryService(repo CategoryRepo) *CategoryService {
+func NewCategoryService(repo repository.Category) *CategoryService {
 	return &CategoryService{
 		repo:             repo,
 		systemCategories: nil,
@@ -50,7 +40,7 @@ func (s *CategoryService) DeleteCategory(userID, categoryID uint) (bool, error) 
 	return s.repo.DeleteCategory(userID, categoryID)
 }
 
-func (s *CategoryService) SystemCategories() ([]Category, error) {
+func (s *CategoryService) SystemCategories() ([]models.Category, error) {
 	if s.systemCategories == nil {
 		categories, err := s.repo.SystemCategories()
 		if err != nil {
@@ -62,11 +52,11 @@ func (s *CategoryService) SystemCategories() ([]Category, error) {
 	return s.systemCategories, nil
 }
 
-func (s *CategoryService) UserCategories(userID uint) ([]Category, error) {
+func (s *CategoryService) UserCategories(userID uint) ([]models.Category, error) {
 	return s.repo.UserCategories(userID)
 }
 
-func (s *CategoryService) Categories(userID uint) ([]Category, error) {
+func (s *CategoryService) Categories(userID uint) ([]models.Category, error) {
 	systemCategories, err := s.SystemCategories()
 	if err != nil {
 		return nil, lib.Ewrap("Couldn't get categories", err)

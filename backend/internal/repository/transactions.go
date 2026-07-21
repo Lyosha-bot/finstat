@@ -3,10 +3,12 @@ package repository
 import (
 	"context"
 	"finstat/internal/lib"
+	"finstat/internal/models"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shopspring/decimal"
 )
 
@@ -62,16 +64,17 @@ const (
 	`
 )
 
-type Transaction struct {
-	ID          uint            `json:"id" db:"id"`
-	UserID      uint            `json:"userID" db:"user_id"`
-	Value       decimal.Decimal `json:"value" db:"value"`
-	CategoryID  uint            `json:"category_id" db:"category_id"`
-	Description string          `json:"description" db:"description"`
-	Date        time.Time       `json:"date" db:"date"`
+type TransactionRepo struct {
+	pool *pgxpool.Pool
 }
 
-func (c *Client) InsertTransaction(userID uint, value decimal.Decimal, categoryID uint, description string, date time.Time) (uint, error) {
+func NewTransactionRepo(pool *pgxpool.Pool) *TransactionRepo {
+	return &TransactionRepo{
+		pool: pool,
+	}
+}
+
+func (c *TransactionRepo) InsertTransaction(userID uint, value decimal.Decimal, categoryID uint, description string, date time.Time) (uint, error) {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -91,7 +94,7 @@ func (c *Client) InsertTransaction(userID uint, value decimal.Decimal, categoryI
 	return id, nil
 }
 
-func (c *Client) UpdateTransaction(userID uint, transactionID uint, newValue decimal.Decimal, newCategoryID uint, newDescription string, newDate time.Time) (bool, error) {
+func (c *TransactionRepo) UpdateTransaction(userID uint, transactionID uint, newValue decimal.Decimal, newCategoryID uint, newDescription string, newDate time.Time) (bool, error) {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -109,7 +112,7 @@ func (c *Client) UpdateTransaction(userID uint, transactionID uint, newValue dec
 	return cmdTag.RowsAffected() != 0, nil
 }
 
-func (c *Client) DeleteTransaction(userID uint, transactionID uint) (bool, error) {
+func (c *TransactionRepo) DeleteTransaction(userID uint, transactionID uint) (bool, error) {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -127,26 +130,7 @@ func (c *Client) DeleteTransaction(userID uint, transactionID uint) (bool, error
 	return cmdTag.RowsAffected() != 0, nil
 }
 
-func (c *Client) TransactionByID(userID, transactionID uint) (*Transaction, error) {
-	ctx := context.Background()
-
-	conn, err := c.pool.Acquire(ctx)
-	if err != nil {
-		return nil, lib.Ewrap("Couldn't acquire connection", err)
-	}
-	defer conn.Release()
-
-	row := conn.QueryRow(ctx, TRANSACTION_BY_ID_QUERY, transactionID)
-
-	var transaction Transaction
-	if err = row.Scan(&transaction); err != nil {
-		return nil, lib.Ewrap("Couldn't get transaction by ID", err)
-	}
-
-	return &transaction, nil
-}
-
-func (c *Client) Transactions(userID, limit, page uint, from, to *time.Time, transactionType int, categories []uint) ([]Transaction, error) {
+func (c *TransactionRepo) Transactions(userID, limit, page uint, from, to *time.Time, transactionType int, categories []uint) ([]models.Transaction, error) {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -206,9 +190,9 @@ func (c *Client) Transactions(userID, limit, page uint, from, to *time.Time, tra
 		return nil, lib.Ewrap("Couldn't get transactions", err)
 	}
 
-	result := make([]Transaction, 0, limit)
+	result := make([]models.Transaction, 0, limit)
 	for rows.Next() {
-		var val Transaction
+		var val models.Transaction
 		if err = rows.Scan(&val); err != nil {
 			return nil, lib.Ewrap("Couldn't scan transaction", err)
 		}
