@@ -5,19 +5,26 @@ interface HeaderProps {
   setActiveTab: (tab: 'transactions' | 'stats') => void
   onAddClick: () => void
   onBudgetClick: () => void
+  onCategoryManagerClick: () => void
   onLogout: () => void
   username?: string
 }
 
-export const Header = ({
-  activeTab,
-  setActiveTab,
-  onAddClick,
+export const Header = ({ 
+  activeTab, 
+  setActiveTab, 
+  onAddClick, 
   onBudgetClick,
+  onCategoryManagerClick,
   onLogout,
-  username = 'Пользователь',
+  username = 'Пользователь'
 }: HeaderProps) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false)
+
+  const handleLogoutClick = () => {
+    onLogout()
+    setShowProfileMenu(false)
+  }
 
   return (
     <header className="header">
@@ -37,28 +44,33 @@ export const Header = ({
             >
               Инфографика
             </button>
+          </div>
+          <div className="nav-buttons">
             <button className="btn btn-primary" onClick={onAddClick}>
               + Добавить
             </button>
             <button className="btn btn-secondary" onClick={onBudgetClick}>
               Бюджет
             </button>
-          </div>
-          <div className="profile-wrapper">
-            <button
-              className="profile-btn"
-              onClick={() => setShowProfileMenu(!showProfileMenu)}
-            >
-              <span className="profile-icon">👤</span>
-              <span className="profile-name">{username}</span>
+            <button className="btn btn-secondary" onClick={onCategoryManagerClick}>
+              Категории
             </button>
-            {showProfileMenu && (
-              <div className="profile-dropdown">
-                <button className="btn btn-secondary" onClick={onLogout}>
-                  Выйти
-                </button>
-              </div>
-            )}
+            <div className="profile-wrapper">
+              <button 
+                className="profile-btn" 
+                onClick={() => setShowProfileMenu(!showProfileMenu)}
+              >
+                <span className="profile-icon">👤</span>
+                <span className="profile-name">{username}</span>
+              </button>
+              {showProfileMenu && (
+                <div className="profile-dropdown">
+                  <button className="btn btn-secondary" onClick={handleLogoutClick}>
+                    Выйти
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
