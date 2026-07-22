@@ -1,18 +1,19 @@
-import { type Category } from '../api/categories'
+import { memo } from 'react'
+import type { Category } from '../api/categories'
 
 interface FiltersProps {
   periodFilter: 'all' | 'today' | 'week' | 'month'
   setPeriodFilter: (val: any) => void
   filterType: 'all' | 'income' | 'expense'
   setFilterType: (val: any) => void
-  filterCategory: number | 'all'   // теперь ID категории или 'all'
+  filterCategory: number | 'all'
   setFilterCategory: (val: number | 'all') => void
   searchQuery: string
   setSearchQuery: (val: string) => void
   categories: Category[]
 }
 
-export const Filters = ({
+export const Filters = memo(({
   periodFilter,
   setPeriodFilter,
   filterType,
@@ -68,4 +69,4 @@ export const Filters = ({
       </div>
     </section>
   )
-}
+})

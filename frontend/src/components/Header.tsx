@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 
 interface HeaderProps {
   activeTab: 'transactions' | 'stats'
@@ -10,14 +10,14 @@ interface HeaderProps {
   username?: string
 }
 
-export const Header = ({ 
-  activeTab, 
-  setActiveTab, 
-  onAddClick, 
+export const Header = memo(({
+  activeTab,
+  setActiveTab,
+  onAddClick,
   onBudgetClick,
   onCategoryManagerClick,
   onLogout,
-  username = 'Пользователь'
+  username = 'Пользователь',
 }: HeaderProps) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false)
 
@@ -30,21 +30,24 @@ export const Header = ({
     <header className="header">
       <div className="header-content">
         <h1>Финансовый учёт</h1>
+        
+        {/* Большая toggle-кнопка под заголовком */}
+        <div className="tab-toggle">
+          <button
+            className={`tab-toggle-btn ${activeTab === 'transactions' ? 'active' : ''}`}
+            onClick={() => setActiveTab('transactions')}
+          >
+            Транзакции
+          </button>
+          <button
+            className={`tab-toggle-btn ${activeTab === 'stats' ? 'active' : ''}`}
+            onClick={() => setActiveTab('stats')}
+          >
+            Инфографика
+          </button>
+        </div>
+
         <div className="header-actions">
-          <div className="nav-buttons">
-            <button
-              className={`tab-btn ${activeTab === 'transactions' ? 'active' : ''}`}
-              onClick={() => setActiveTab('transactions')}
-            >
-              Транзакции
-            </button>
-            <button
-              className={`tab-btn ${activeTab === 'stats' ? 'active' : ''}`}
-              onClick={() => setActiveTab('stats')}
-            >
-              Инфографика
-            </button>
-          </div>
           <div className="nav-buttons">
             <button className="btn btn-primary" onClick={onAddClick}>
               + Добавить
@@ -56,9 +59,9 @@ export const Header = ({
               Категории
             </button>
             <div className="profile-wrapper">
-              <button 
-                className="profile-btn" 
-                onClick={() => setShowProfileMenu(!showProfileMenu)}
+              <button
+                className="profile-btn"
+                onClick={() => setShowProfileMenu(v => !v)}
               >
                 <span className="profile-icon">👤</span>
                 <span className="profile-name">{username}</span>
@@ -76,4 +79,4 @@ export const Header = ({
       </div>
     </header>
   )
-}
+})

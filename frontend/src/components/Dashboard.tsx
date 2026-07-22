@@ -3,6 +3,7 @@ import type { Transaction } from '../types'
 import { useTransactions } from '../hooks/useTransactions'
 import { useCategories } from '../hooks/useCategories'
 import { useBudgets } from '../hooks/useBudgets'
+import { toLocalDateStr } from '../utils/format'
 import {
   Header,
   Stats,
@@ -26,7 +27,7 @@ export const Dashboard = React.memo(({ username, onLogout }: DashboardProps) => 
   const [showCategoryManagerModal, setShowCategoryManagerModal] = useState(false)
 
   // ===== Бюджеты (получаем refetch) =====
-  const currentDate = new Date().toISOString().split('T')[0]
+  const currentDate = toLocalDateStr(new Date())
   const { budgets, loading: budgetsLoading, error: budgetsError, addBudget, removeBudget, editBudget, refetch: refetchBudgets } = useBudgets(currentDate)
 
   // ===== Модалка подтверждения =====
@@ -85,18 +86,18 @@ export const Dashboard = React.memo(({ username, onLogout }: DashboardProps) => 
     const params: any = { limit: 1000, page: 1 }
     const now = new Date()
     if (periodFilter === 'today') {
-      params.from = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString().split('T')[0]
-      params.to = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString().split('T')[0]
+      params.from = toLocalDateStr(new Date(now.getFullYear(), now.getMonth(), now.getDate()))
+      params.to = toLocalDateStr(new Date(now.getFullYear(), now.getMonth(), now.getDate()))
     } else if (periodFilter === 'week') {
       const weekAgo = new Date(now)
       weekAgo.setDate(now.getDate() - 7)
-      params.from = weekAgo.toISOString().split('T')[0]
-      params.to = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString().split('T')[0]
+      params.from = toLocalDateStr(weekAgo)
+      params.to = toLocalDateStr(new Date(now.getFullYear(), now.getMonth(), now.getDate()))
     } else if (periodFilter === 'month') {
       const monthAgo = new Date(now)
       monthAgo.setMonth(now.getMonth() - 1)
-      params.from = monthAgo.toISOString().split('T')[0]
-      params.to = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString().split('T')[0]
+      params.from = toLocalDateStr(monthAgo)
+      params.to = toLocalDateStr(new Date(now.getFullYear(), now.getMonth(), now.getDate()))
     }
     if (filterType === 'income') params.type = 1
     else if (filterType === 'expense') params.type = -1
@@ -131,7 +132,7 @@ export const Dashboard = React.memo(({ username, onLogout }: DashboardProps) => 
     amount: '',
     category: getDefaultCategoryId(),
     type: 'expense' as 'income' | 'expense',
-    date: new Date().toISOString().split('T')[0],
+    date: toLocalDateStr(new Date()),
   })
 
   useEffect(() => {
@@ -183,6 +184,7 @@ export const Dashboard = React.memo(({ username, onLogout }: DashboardProps) => 
         return [cat ? cat.name : 'Без категории', amount] as [string, number]
       })
       .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
   }, [statsData, categories])
 
   const expenseStats = useMemo(() => {
@@ -196,6 +198,7 @@ export const Dashboard = React.memo(({ username, onLogout }: DashboardProps) => 
         return [cat ? cat.name : 'Без категории', Math.abs(amount)] as [string, number]
       })
       .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
   }, [statsData, categories])
 
   const monthlyStats = useMemo(() => {
@@ -206,7 +209,7 @@ export const Dashboard = React.memo(({ username, onLogout }: DashboardProps) => 
       if (t.value > 0) months[m].income += t.value
       else months[m].expense += Math.abs(t.value)
     })
-    return Object.entries(months).sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime())
+    return Object.entries(months).sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime()).slice(-10)
   }, [statsData])
 
   const cumulative = useMemo(() => {
@@ -221,7 +224,7 @@ export const Dashboard = React.memo(({ username, onLogout }: DashboardProps) => 
       cum += dailyMap[date]
       result.push({ label: date, value: cum })
     })
-    return result
+    return result.slice(-10)
   }, [statsData])
 
   const avgDaily = useMemo(() => {
@@ -275,7 +278,7 @@ export const Dashboard = React.memo(({ username, onLogout }: DashboardProps) => 
         amount: '',
         category: categories.length > 0 ? categories[0].id : 0,
         type: 'expense',
-        date: new Date().toISOString().split('T')[0],
+        date: toLocalDateStr(new Date()),
       })
       setShowAddModal(false)
     } catch (err: any) {
@@ -322,7 +325,7 @@ export const Dashboard = React.memo(({ username, onLogout }: DashboardProps) => 
         amount: '',
         category: categories.length > 0 ? categories[0].id : 0,
         type: 'expense',
-        date: new Date().toISOString().split('T')[0],
+        date: toLocalDateStr(new Date()),
       })
       setShowAddModal(false)
     } catch (err: any) {
@@ -391,7 +394,7 @@ export const Dashboard = React.memo(({ username, onLogout }: DashboardProps) => 
             amount: '',
             category: categories.length > 0 ? categories[0].id : 0,
             type: 'expense',
-            date: new Date().toISOString().split('T')[0],
+            date: toLocalDateStr(new Date()),
           })
           setShowAddModal(true)
         }}
@@ -446,6 +449,7 @@ export const Dashboard = React.memo(({ username, onLogout }: DashboardProps) => 
           expenseStats={expenseStats}
           budgetStats={budgets.map(b => ({
             ...b,
+            category: b.name,
             spent: Math.abs(b.current_value),
             percent: Math.min((Math.abs(b.current_value) / b.limit_value) * 100, 100),
           }))}
@@ -494,7 +498,6 @@ export const Dashboard = React.memo(({ username, onLogout }: DashboardProps) => 
         onConfirm={openConfirm}
       />
 
-      {/* Модалка подтверждения / ошибки */}
       {confirmState.show && (
         <div className="modal-overlay" onClick={() => setConfirmState({ show: false, message: '', isError: false })}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -514,7 +517,6 @@ export const Dashboard = React.memo(({ username, onLogout }: DashboardProps) => 
         </div>
       )}
 
-      {/* Модалка редактирования бюджета */}
       {editBudgetState.show && (
         <div className="modal-overlay" onClick={() => setEditBudgetState({ show: false, id: null, limit: '' })}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>

@@ -1,6 +1,6 @@
-import { type Category } from '../api/categories'
-import { type CreateBudgetPayload } from '../api/budgets'
-import { useState } from 'react'
+import { memo, useState } from 'react'
+import type { Category } from '../api/categories'
+import type { CreateBudgetPayload } from '../api/budgets'
 
 interface BudgetModalProps {
   isOpen: boolean
@@ -9,7 +9,7 @@ interface BudgetModalProps {
   onCreateBudget: (payload: CreateBudgetPayload) => Promise<void>
 }
 
-export const BudgetModal = ({ isOpen, onClose, categories, onCreateBudget }: BudgetModalProps) => {
+export const BudgetModal = memo(({ isOpen, onClose, categories, onCreateBudget }: BudgetModalProps) => {
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | ''>('')
   const [limit, setLimit] = useState('')
   const [error, setError] = useState('')
@@ -86,4 +86,4 @@ export const BudgetModal = ({ isOpen, onClose, categories, onCreateBudget }: Bud
       </div>
     </div>
   )
-}
+})
