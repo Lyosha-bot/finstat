@@ -9,4 +9,6 @@ var (
 	ShortString = errors.New("short string")
 
 	TokenExpired = errors.New("token expired")
+
+	PasswordMismatched = errors.New("passwords mismatched")
 )

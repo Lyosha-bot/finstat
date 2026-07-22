@@ -70,7 +70,7 @@ func (s *AuthService) Login(username, password string) (accessToken string, refr
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.HashedPassword), []byte(password)); err != nil {
-		return "", "", lib.Ewrap("Passwords mismatched", err)
+		return "", "", apperr.PasswordMismatched
 	}
 
 	return s.generateTokens(user.ID)

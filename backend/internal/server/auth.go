@@ -152,7 +152,7 @@ func (s *Server) login(c *gin.Context) {
 	if err != nil {
 		log.Println(err)
 		switch {
-		case errors.Is(err, apperr.NoRows):
+		case errors.Is(err, apperr.NoRows) || errors.Is(err, apperr.PasswordMismatched):
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Нверное имя пользователя или пароль"})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Ошибка авторизации пользователя"})
