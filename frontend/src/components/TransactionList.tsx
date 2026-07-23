@@ -1,3 +1,4 @@
+import { memo, useMemo } from 'react'
 import type { Transaction } from '../types'
 import type { Category } from '../api/categories'
 import { formatMoney, formatDate } from '../utils/format'
@@ -9,11 +10,14 @@ interface TransactionListProps {
   categories: Category[]
 }
 
-export const TransactionList = ({ grouped, onEdit, onDelete, categories }: TransactionListProps) => {
-  const getCategoryName = (id: number) => {
-    const cat = categories.find(c => c.id === id)
-    return cat ? cat.name : 'Без категории'
-  }
+export const TransactionList = memo(({ grouped, onEdit, onDelete, categories }: TransactionListProps) => {
+  const categoryMap = useMemo(() => {
+    const map: Record<number, string> = {}
+    categories.forEach(c => { map[c.id] = c.name })
+    return map
+  }, [categories])
+
+  const getCategoryName = (id: number) => categoryMap[id] || 'Без категории'
 
   if (grouped.length === 0) {
     return (
@@ -61,4 +65,4 @@ export const TransactionList = ({ grouped, onEdit, onDelete, categories }: Trans
       ))}
     </div>
   )
-}
+})

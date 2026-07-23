@@ -3,6 +3,9 @@ package repository
 import (
 	"context"
 	"finstat/internal/lib"
+	"finstat/internal/models"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const (
@@ -52,12 +55,17 @@ const (
 	`
 )
 
-type Category struct {
-	ID   uint   `json:"id" db:"id"`
-	Name string `json:"name" db:"name"`
+type CategoryRepo struct {
+	pool *pgxpool.Pool
 }
 
-func (c *Client) InsertCategory(userID uint, categoryName string) (uint, error) {
+func NewCategoryRepo(pool *pgxpool.Pool) *CategoryRepo {
+	return &CategoryRepo{
+		pool: pool,
+	}
+}
+
+func (c *CategoryRepo) InsertCategory(userID uint, categoryName string) (uint, error) {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -77,7 +85,7 @@ func (c *Client) InsertCategory(userID uint, categoryName string) (uint, error) 
 	return id, nil
 }
 
-func (c *Client) UpdateCategory(userID, categoryID uint, newCategoryName string) (bool, error) {
+func (c *CategoryRepo) UpdateCategory(userID, categoryID uint, newCategoryName string) (bool, error) {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -95,7 +103,7 @@ func (c *Client) UpdateCategory(userID, categoryID uint, newCategoryName string)
 	return cmdTag.RowsAffected() != 0, nil
 }
 
-func (c *Client) DeleteCategory(userID, categoryID uint) (bool, error) {
+func (c *CategoryRepo) DeleteCategory(userID, categoryID uint) (bool, error) {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -113,7 +121,7 @@ func (c *Client) DeleteCategory(userID, categoryID uint) (bool, error) {
 	return cmdTag.RowsAffected() != 0, nil
 }
 
-func (c *Client) SystemCategories() ([]Category, error) {
+func (c *CategoryRepo) SystemCategories() ([]models.Category, error) {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -127,9 +135,9 @@ func (c *Client) SystemCategories() ([]Category, error) {
 		return nil, lib.Ewrap("Couldn't get system categories", err)
 	}
 
-	result := make([]Category, 0, 10)
+	result := make([]models.Category, 0, 10)
 	for rows.Next() {
-		var val Category
+		var val models.Category
 		if err = rows.Scan(&val); err != nil {
 			return nil, lib.Ewrap("Couldn't scan category", err)
 		}
@@ -144,7 +152,7 @@ func (c *Client) SystemCategories() ([]Category, error) {
 	return result, nil
 }
 
-func (c *Client) UserCategories(userID uint) ([]Category, error) {
+func (c *CategoryRepo) UserCategories(userID uint) ([]models.Category, error) {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -158,9 +166,9 @@ func (c *Client) UserCategories(userID uint) ([]Category, error) {
 		return nil, lib.Ewrap("Couldn't get user categories", err)
 	}
 
-	result := make([]Category, 0, 10)
+	result := make([]models.Category, 0, 10)
 	for rows.Next() {
-		var val Category
+		var val models.Category
 		if err = rows.Scan(&val); err != nil {
 			return nil, lib.Ewrap("Couldn't scan category", err)
 		}
@@ -175,7 +183,7 @@ func (c *Client) UserCategories(userID uint) ([]Category, error) {
 	return result, nil
 }
 
-func (c *Client) Categories(userID uint) ([]Category, error) {
+func (c *CategoryRepo) Categories(userID uint) ([]models.Category, error) {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -189,9 +197,9 @@ func (c *Client) Categories(userID uint) ([]Category, error) {
 		return nil, lib.Ewrap("Couldn't get categories", err)
 	}
 
-	result := make([]Category, 0, 10)
+	result := make([]models.Category, 0, 10)
 	for rows.Next() {
-		var val Category
+		var val models.Category
 		if err = rows.Scan(&val); err != nil {
 			return nil, lib.Ewrap("Couldn't scan category", err)
 		}

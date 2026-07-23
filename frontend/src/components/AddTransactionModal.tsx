@@ -1,4 +1,5 @@
-import { type Category } from '../api/categories'
+import { memo } from 'react'
+import type { Category } from '../api/categories'
 
 interface AddTransactionModalProps {
   isOpen: boolean
@@ -6,7 +7,7 @@ interface AddTransactionModalProps {
   formData: {
     description: string
     amount: string
-    category: number   // теперь число (ID)
+    category: number
     type: 'income' | 'expense'
     date: string
   }
@@ -16,7 +17,7 @@ interface AddTransactionModalProps {
   categories: Category[]
 }
 
-export const AddTransactionModal = ({
+export const AddTransactionModal = memo(({
   isOpen,
   onClose,
   formData,
@@ -96,4 +97,4 @@ export const AddTransactionModal = ({
       </div>
     </div>
   )
-}
+})

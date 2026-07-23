@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { formatMoney } from '../utils/format'
 
 interface StatsProps {
@@ -6,7 +7,7 @@ interface StatsProps {
   totalExpense: number
 }
 
-export const Stats = ({ balance, totalIncome, totalExpense }: StatsProps) => {
+export const Stats = memo(({ balance, totalIncome, totalExpense }: StatsProps) => {
   return (
     <section className="stats">
       <div className="stat-card">
@@ -23,4 +24,4 @@ export const Stats = ({ balance, totalIncome, totalExpense }: StatsProps) => {
       </div>
     </section>
   )
-}
+})

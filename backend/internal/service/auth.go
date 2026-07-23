@@ -3,6 +3,7 @@ package service
 import (
 	"finstat/internal/apperr"
 	"finstat/internal/lib"
+	"finstat/internal/models"
 	"finstat/internal/repository"
 	"finstat/internal/token"
 	"time"
@@ -13,43 +14,21 @@ import (
 const ACCESS_TOKEN_LIFE_TIME = 15 * 60
 const REFRESH_TOKEN_LIFE_TIME = 7 * 24 * 60 * 60
 
-type User = repository.User
-type RefreshToken = repository.RefreshToken
-
-type AuthRepo interface {
-	InsertUser(username, password string) error
-	InsertRefreshToken(userID uint, expires_at time.Time) (string, error)
-	DeleteRefreshToken(tokenUUID string) (bool, error)
-	DeleteAllRefreshTokens(userID uint) (bool, error)
-	User(username string) (*User, error)
-	RefreshToken(tokenUUID string) (*RefreshToken, error)
-}
+type User models.User
+type RefreshToken models.RefreshToken
 
 type AuthService struct {
-	repo             AuthRepo
+	repo             repository.Auth
 	jwtAccessSecret  []byte
 	jwtRefreshSecret []byte
 }
 
-func NewAuthService(repo AuthRepo, jwtAccessSecret, jwtRefreshSecret []byte) *AuthService {
+func NewAuthService(repo repository.Auth, jwtAccessSecret, jwtRefreshSecret []byte) *AuthService {
 	return &AuthService{
 		repo:             repo,
 		jwtAccessSecret:  jwtAccessSecret,
 		jwtRefreshSecret: jwtRefreshSecret,
 	}
-}
-
-func (s *AuthService) Register(username, password string) error {
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return lib.Ewrap("Couldn't generate hashed password", err)
-	}
-
-	if err := s.repo.InsertUser(username, string(hashedPassword)); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (s *AuthService) generateTokens(userID uint) (accessToken string, refreshToken string, err error) {
@@ -69,6 +48,32 @@ func (s *AuthService) generateTokens(userID uint) (accessToken string, refreshTo
 	}
 
 	return accessToken, refreshToken, nil
+}
+
+func (s *AuthService) Register(username, password string) error {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return lib.Ewrap("Couldn't generate hashed password", err)
+	}
+
+	if err := s.repo.InsertUser(username, string(hashedPassword)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *AuthService) Login(username, password string) (accessToken string, refreshToken string, err error) {
+	user, err := s.repo.User(username)
+	if err != nil {
+		return "", "", lib.Ewrap("Couldn't get user", err)
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.HashedPassword), []byte(password)); err != nil {
+		return "", "", apperr.PasswordMismatched
+	}
+
+	return s.generateTokens(user.ID)
 }
 
 func (s *AuthService) Refresh(refreshToken string) (newAccessToken string, newRefreshToken string, err error) {
@@ -92,19 +97,6 @@ func (s *AuthService) Refresh(refreshToken string) (newAccessToken string, newRe
 	}
 
 	return s.generateTokens(token.UserID)
-}
-
-func (s *AuthService) Login(username, password string) (accessToken string, refreshToken string, err error) {
-	user, err := s.repo.User(username)
-	if err != nil {
-		return "", "", lib.Ewrap("Couldn't get user", err)
-	}
-
-	if err := bcrypt.CompareHashAndPassword([]byte(user.HashedPassword), []byte(password)); err != nil {
-		return "", "", lib.Ewrap("Passwords mismatched", err)
-	}
-
-	return s.generateTokens(user.ID)
 }
 
 func (s *AuthService) Logout(refreshToken string) error {

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { SYSTEM_CATEGORIES } from '../constants'
 import type { Category, CreateCategoryPayload, UpdateCategoryPayload } from '../api/categories'
 
@@ -12,7 +12,7 @@ interface CategoryManagerModalProps {
   onConfirm: (message: string, onConfirm?: () => void) => void
 }
 
-export const CategoryManagerModal = ({
+export const CategoryManagerModal = memo(({
   isOpen,
   onClose,
   categories = [],
@@ -100,20 +100,19 @@ export const CategoryManagerModal = ({
         </div>
         {error && <p className="error-text">{error}</p>}
         <div style={{ marginTop: '1.5rem', maxHeight: '300px', overflowY: 'auto' }}>
-          <h3>Мои категории</h3>
+          <h3 style={{ fontSize: '0.9rem', color: 'var(--c-text-secondary)', marginBottom: '0.5rem' }}>Мои категории</h3>
           {userCategories.length === 0 ? (
-            <p>Нет пользовательских категорий</p>
+            <p style={{ color: 'var(--c-text-muted)', fontSize: '0.9rem' }}>Нет пользовательских категорий</p>
           ) : (
             userCategories.map(cat => (
               <div
                 key={cat.id}
-                className="category-item"
                 style={{
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
-                  padding: '0.4rem 0',
-                  borderBottom: '1px solid rgba(255,255,255,0.06)',
+                  padding: '0.5rem 0',
+                  borderBottom: '1px solid var(--c-border)',
                 }}
               >
                 {editingId === cat.id ? (
@@ -125,7 +124,7 @@ export const CategoryManagerModal = ({
                     style={{ flex: 1, marginRight: '0.5rem' }}
                   />
                 ) : (
-                  <span>{cat.name}</span>
+                  <span style={{ color: 'var(--c-text)' }}>{cat.name}</span>
                 )}
                 <div style={{ display: 'flex', gap: '0.3rem' }}>
                   {editingId === cat.id ? (
@@ -150,4 +149,4 @@ export const CategoryManagerModal = ({
       </div>
     </div>
   )
-}
+})

@@ -5,10 +5,12 @@ import (
 	"errors"
 	"finstat/internal/apperr"
 	"finstat/internal/lib"
+	"finstat/internal/models"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const ACTIVE_REFRESH_TOKENS_COUNT = 4
@@ -70,19 +72,17 @@ const (
 	`
 )
 
-type User struct {
-	ID             uint   `json:"id"`
-	Name           string `json:"name"`
-	HashedPassword string `json:"hashed_password"`
+type AuthRepo struct {
+	pool *pgxpool.Pool
 }
 
-type RefreshToken struct {
-	UUID      string    `json:"uuid"`
-	UserID    uint      `json:"user_id"`
-	ExpiresAt time.Time `json:"expires_at"`
+func NewAuthRepo(pool *pgxpool.Pool) *AuthRepo {
+	return &AuthRepo{
+		pool: pool,
+	}
 }
 
-func (c *Client) InsertUser(username, password string) error {
+func (c *AuthRepo) InsertUser(username, password string) error {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -108,7 +108,7 @@ func (c *Client) InsertUser(username, password string) error {
 	return nil
 }
 
-func (c *Client) InsertRefreshToken(userID uint, expiresAt time.Time) (string, error) {
+func (c *AuthRepo) InsertRefreshToken(userID uint, expiresAt time.Time) (string, error) {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -127,7 +127,7 @@ func (c *Client) InsertRefreshToken(userID uint, expiresAt time.Time) (string, e
 	return id, nil
 }
 
-func (c *Client) DeleteRefreshToken(tokenUUID string) (bool, error) {
+func (c *AuthRepo) DeleteRefreshToken(tokenUUID string) (bool, error) {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -145,7 +145,7 @@ func (c *Client) DeleteRefreshToken(tokenUUID string) (bool, error) {
 	return cmdTag.RowsAffected() != 0, nil
 }
 
-func (c *Client) DeleteAllRefreshTokens(userID uint) (bool, error) {
+func (c *AuthRepo) DeleteAllRefreshTokens(userID uint) (bool, error) {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -163,7 +163,7 @@ func (c *Client) DeleteAllRefreshTokens(userID uint) (bool, error) {
 	return cmdTag.RowsAffected() != 0, nil
 }
 
-func (c *Client) User(username string) (*User, error) {
+func (c *AuthRepo) User(username string) (*models.User, error) {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -174,7 +174,7 @@ func (c *Client) User(username string) (*User, error) {
 
 	row := conn.QueryRow(ctx, USER_QUERY, username)
 
-	var result User
+	var result models.User
 	if err := row.Scan(&result); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, apperr.NoRows
@@ -185,7 +185,7 @@ func (c *Client) User(username string) (*User, error) {
 	return &result, nil
 }
 
-func (c *Client) RefreshToken(uuid string) (*RefreshToken, error) {
+func (c *AuthRepo) RefreshToken(uuid string) (*models.RefreshToken, error) {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -196,7 +196,7 @@ func (c *Client) RefreshToken(uuid string) (*RefreshToken, error) {
 
 	row := conn.QueryRow(ctx, REFRESH_TOKEN_QUERY, uuid)
 
-	var result RefreshToken
+	var result models.RefreshToken
 	if err := row.Scan(&result); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, apperr.NoRows

@@ -5,10 +5,12 @@ import (
 	"errors"
 	"finstat/internal/apperr"
 	"finstat/internal/lib"
+	"finstat/internal/models"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shopspring/decimal"
 )
 
@@ -67,15 +69,17 @@ const (
 	`
 )
 
-type Budget struct {
-	ID           uint            `json:"id" db:"id"`
-	CategoryID   uint            `json:"category_id" db:"category_id"`
-	CategoryName string          `json:"category_name" db:"category_name"`
-	LimitValue   decimal.Decimal `json:"limit_value" db:"limit_value"`
-	CurrentValue decimal.Decimal `json:"current_value" db:"current_value"`
+type BudgetRepo struct {
+	pool *pgxpool.Pool
 }
 
-func (c *Client) InsertBudget(userID, categoryID uint, limit decimal.Decimal) error {
+func NewBudgetRepo(pool *pgxpool.Pool) *BudgetRepo {
+	return &BudgetRepo{
+		pool: pool,
+	}
+}
+
+func (c *BudgetRepo) InsertBudget(userID, categoryID uint, limit decimal.Decimal) error {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -101,7 +105,7 @@ func (c *Client) InsertBudget(userID, categoryID uint, limit decimal.Decimal) er
 	return nil
 }
 
-func (c *Client) UpdateBudget(userID, budgetID uint, newLimit decimal.Decimal) (bool, error) {
+func (c *BudgetRepo) UpdateBudget(userID, budgetID uint, newLimit decimal.Decimal) (bool, error) {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -119,7 +123,7 @@ func (c *Client) UpdateBudget(userID, budgetID uint, newLimit decimal.Decimal) (
 	return cmdTag.RowsAffected() != 0, nil
 }
 
-func (c *Client) DeleteBudget(userID, budgetID uint) (bool, error) {
+func (c *BudgetRepo) DeleteBudget(userID, budgetID uint) (bool, error) {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -137,7 +141,7 @@ func (c *Client) DeleteBudget(userID, budgetID uint) (bool, error) {
 	return cmdTag.RowsAffected() != 0, nil
 }
 
-func (c *Client) Budgets(userID uint, from, to time.Time) ([]Budget, error) {
+func (c *BudgetRepo) Budgets(userID uint, from, to time.Time) ([]models.Budget, error) {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -154,9 +158,9 @@ func (c *Client) Budgets(userID uint, from, to time.Time) ([]Budget, error) {
 		return nil, lib.Ewrap("Couldn't get budgets data", err)
 	}
 
-	result := make([]Budget, 0, 5)
+	result := make([]models.Budget, 0, 5)
 	for rows.Next() {
-		var val Budget
+		var val models.Budget
 		if err = rows.Scan(&val.ID, &val.CategoryID, &val.CategoryName, &val.LimitValue, &val.CurrentValue); err != nil {
 			return nil, lib.Ewrap("Couldn't scan budget", err)
 		}
@@ -173,7 +177,7 @@ func (c *Client) Budgets(userID uint, from, to time.Time) ([]Budget, error) {
 	return result, nil
 }
 
-func (c *Client) BudgetByCategory(userID, categoryID uint, from, to time.Time) (*Budget, error) {
+func (c *BudgetRepo) BudgetByCategory(userID, categoryID uint, from, to time.Time) (*models.Budget, error) {
 	ctx := context.Background()
 
 	conn, err := c.pool.Acquire(ctx)
@@ -184,7 +188,7 @@ func (c *Client) BudgetByCategory(userID, categoryID uint, from, to time.Time) (
 
 	row := conn.QueryRow(ctx, BUDGET_BY_CATEGORY_QUERY, userID, categoryID, from, to)
 
-	var result Budget
+	var result models.Budget
 	err = row.Scan(&result.ID, &result.CategoryID, &result.CategoryName, &result.LimitValue, &result.CurrentValue)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

@@ -1,8 +1,16 @@
+import { memo } from 'react'
 import { formatMoney, formatDate } from '../utils/format'
 
 // ----- Линейный график -----
-export const LineChart = ({ data, labels, colors, max }: { data: number[][]; labels: string[]; colors: string[]; max: number }) => {
-  const padding = { top: 30, bottom: 30, left: 60, right: 40 } // увеличен правый отступ
+interface LineChartProps {
+  data: number[][]
+  labels: string[]
+  colors: string[]
+  max: number
+}
+
+export const LineChart = memo(({ data, labels, colors, max }: LineChartProps) => {
+  const padding = { top: 30, bottom: 30, left: 60, right: 40 }
   const width = 600
   const height = 250
   const innerWidth = width - padding.left - padding.right
@@ -24,37 +32,41 @@ export const LineChart = ({ data, labels, colors, max }: { data: number[][]; lab
   )
 
   return (
-    <svg 
-      viewBox={`0 0 ${width} ${height}`} 
-      preserveAspectRatio="none"
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="xMidYMid meet"
       style={{ width: '100%', height: '100%' }}
     >
+      {/* Сетка */}
       {Array.from({ length: steps + 1 }, (_, i) => {
         const y = padding.top + innerHeight - (i / steps) * innerHeight
         const val = (i / steps) * maxScaled
         return (
           <g key={i}>
-            <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="#444" strokeWidth="1" strokeDasharray="4" />
-            <text x={padding.left - 8} y={y + 4} textAnchor="end" fontSize="10" fill="#888">
+            <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="#333" strokeWidth="1" strokeDasharray="4" />
+            <text x={padding.left - 8} y={y + 4} textAnchor="end" fontSize="10" fill="#666">
               {formatMoney(val)}
             </text>
           </g>
         )
       })}
+      {/* Подписи X */}
       {labels.map((label, i) => {
         const x = padding.left + (i / (labels.length - 1 || 1)) * innerWidth
         return (
-          <text key={i} x={x} y={height - 4} textAnchor="middle" fontSize="10" fill="#888">
+          <text key={i} x={x} y={height - 4} textAnchor="middle" fontSize="10" fill="#666">
             {label}
           </text>
         )
       })}
+      {/* Линии */}
       {pathD.map((d, idx) => (
-        <path key={idx} d={d} fill="none" stroke={colors[idx]} strokeWidth="2.5" strokeLinejoin="round" />
+        <path key={idx} d={d} fill="none" stroke={colors[idx]} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
       ))}
+      {/* Точки */}
       {points.map((dataset, idx) =>
         dataset.map((pt, i) => (
-          <circle key={`${idx}-${i}`} cx={pt.x} cy={pt.y} r="5" fill={colors[idx]}>
+          <circle key={`${idx}-${i}`} cx={pt.x} cy={pt.y} r="4" fill={colors[idx]} stroke="#0a0a0f" strokeWidth="1.5">
             <title>
               {labels[i]}: {formatMoney(data[idx][i])}
             </title>
@@ -63,11 +75,15 @@ export const LineChart = ({ data, labels, colors, max }: { data: number[][]; lab
       )}
     </svg>
   )
-}
+})
 
 // ----- Накопленный баланс -----
-export const CumulativeChart = ({ data }: { data: { label: string; value: number }[] }) => {
-  const padding = { top: 30, bottom: 30, left: 60, right: 40 } // увеличен правый отступ
+interface CumulativeChartProps {
+  data: { label: string; value: number }[]
+}
+
+export const CumulativeChart = memo(({ data }: CumulativeChartProps) => {
+  const padding = { top: 30, bottom: 30, left: 60, right: 40 }
   const width = 600
   const height = 180
   const innerWidth = width - padding.left - padding.right
@@ -89,50 +105,70 @@ export const CumulativeChart = ({ data }: { data: { label: string; value: number
 
   const steps = 4
   const stepVal = maxScaled / steps
-  const yValues = []
+  const yValues: number[] = []
   for (let i = -steps; i <= steps; i++) {
     yValues.push(i * stepVal)
   }
 
   return (
-    <svg 
-      viewBox={`0 0 ${width} ${height}`} 
-      preserveAspectRatio="none"
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="xMidYMid meet"
       style={{ width: '100%', height: '100%' }}
     >
+      {/* Горизонтальные линии */}
       {yValues.map((val) => {
         const y = centerY - (val / maxScaled) * (innerHeight / 2)
         if (Math.abs(val) < 0.001) return null
         return (
           <g key={val}>
-            <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="#444" strokeWidth="1" strokeDasharray="4" />
-            <text x={padding.left - 8} y={y + 4} textAnchor="end" fontSize="10" fill="#888">
+            <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="#333" strokeWidth="1" strokeDasharray="4" />
+            <text x={padding.left - 8} y={y + 4} textAnchor="end" fontSize="10" fill="#666">
               {formatMoney(val)}
             </text>
           </g>
         )
       })}
-      <line x1={padding.left} y1={centerY} x2={width - padding.right} y2={centerY} stroke="#888" strokeWidth="2" strokeDasharray="6" />
+      {/* Нулевая линия */}
+      <line x1={padding.left} y1={centerY} x2={width - padding.right} y2={centerY} stroke="#555" strokeWidth="1.5" strokeDasharray="6" />
       <text x={padding.left - 8} y={centerY + 4} textAnchor="end" fontSize="10" fill="#888">
         {formatMoney(0)}
       </text>
 
-      <path d={path} fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinejoin="round" />
+      {/* Область под линией */}
+      {points.length > 1 && (
+        <path
+          d={`${path} L ${points[points.length - 1].x} ${centerY} L ${points[0].x} ${centerY} Z`}
+          fill="url(#cumulativeGradient)"
+          opacity="0.3"
+        />
+      )}
+      <defs>
+        <linearGradient id="cumulativeGradient" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#4ade80" stopOpacity="0.4" />
+          <stop offset="100%" stopColor="#4ade80" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+
+      {/* Линия */}
+      <path d={path} fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+      {/* Точки */}
       {points.map((p, i) => (
-        <circle key={i} cx={p.x} cy={p.y} r="5" fill="#4ade80">
+        <circle key={i} cx={p.x} cy={p.y} r="4" fill="#4ade80" stroke="#0a0a0f" strokeWidth="1.5">
           <title>
             {formatDate(data[i].label)}: {formatMoney(data[i].value)}
           </title>
         </circle>
       ))}
+      {/* Подписи дат */}
       {data.map((d, i) => {
         const x = padding.left + (i / (data.length - 1 || 1)) * innerWidth
         return (
-          <text key={i} x={x} y={height - 4} textAnchor="middle" fontSize="9" fill="#888">
+          <text key={i} x={x} y={height - 4} textAnchor="middle" fontSize="9" fill="#666">
             {formatDate(d.label)}
           </text>
         )
       })}
     </svg>
   )
-}
+})
