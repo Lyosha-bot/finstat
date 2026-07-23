@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { LineChart, CumulativeChart } from './charts'
 import { formatMoney } from '../utils/format'
 
@@ -19,7 +20,7 @@ interface StatsDashboardProps {
   setStatsDateTo: (val: string) => void
 }
 
-export const StatsDashboard = ({
+export const StatsDashboard = memo(({
   incomeStats,
   expenseStats,
   budgetStats,
@@ -47,7 +48,9 @@ export const StatsDashboard = ({
           <label>По дату</label>
           <input type="date" value={statsDateTo} onChange={(e) => setStatsDateTo(e.target.value)} />
         </div>
-        <button className="btn btn-secondary" onClick={() => { setStatsDateFrom(''); setStatsDateTo(''); }}>Сбросить</button>
+        <button className="btn btn-secondary" onClick={() => { setStatsDateFrom(''); setStatsDateTo(''); }}>
+          Сбросить
+        </button>
       </div>
 
       <div className="stats-dashboard-grid">
@@ -59,7 +62,9 @@ export const StatsDashboard = ({
               incomeStats.map(([cat, amt]) => (
                 <div key={cat} className="bar-item">
                   <span className="bar-label">{cat}</span>
-                  <div className="bar-track"><div className="bar-fill income-fill" style={{ width: `${(amt / maxIncome) * 100}%` }} /></div>
+                  <div className="bar-track">
+                    <div className="bar-fill income-fill" style={{ width: `${(amt / maxIncome) * 100}%` }} />
+                  </div>
                   <span className="bar-value">{formatMoney(amt)}</span>
                 </div>
               ))}
@@ -74,7 +79,9 @@ export const StatsDashboard = ({
               expenseStats.map(([cat, amt]) => (
                 <div key={cat} className="bar-item">
                   <span className="bar-label">{cat}</span>
-                  <div className="bar-track"><div className="bar-fill expense-fill" style={{ width: `${(amt / maxExpense) * 100}%` }} /></div>
+                  <div className="bar-track">
+                    <div className="bar-fill expense-fill" style={{ width: `${(amt / maxExpense) * 100}%` }} />
+                  </div>
                   <span className="bar-value">{formatMoney(amt)}</span>
                 </div>
               ))}
@@ -91,7 +98,9 @@ export const StatsDashboard = ({
                 return (
                   <div key={b.id} className="bar-item">
                     <span className="bar-label">{b.category}</span>
-                    <div className="bar-track"><div className="bar-fill" style={{ width: `${b.percent}%`, backgroundColor: color }} /></div>
+                    <div className="bar-track">
+                      <div className="bar-fill" style={{ width: `${b.percent}%`, backgroundColor: color }} />
+                    </div>
                     <span className="bar-value">{formatMoney(b.spent)} / {formatMoney(b.limit_value)}</span>
                   </div>
                 )
@@ -103,7 +112,9 @@ export const StatsDashboard = ({
         <div className="chart-card">
           <h3>Накопленный баланс</h3>
           <div className="cumulative-chart">
-            {cumulative.length === 0 ? <p className="empty-chart">Нет данных</p> : <CumulativeChart data={cumulative} />}
+            {cumulative.length === 0
+              ? <p className="empty-chart">Нет данных</p>
+              : <CumulativeChart data={cumulative} />}
           </div>
         </div>
 
@@ -119,10 +130,6 @@ export const StatsDashboard = ({
               <span className="avg-label">Средний расход в день</span>
               <span className="avg-value expense">{formatMoney(avgDaily.avgExpense)}</span>
             </div>
-            <div className="avg-item">
-              <span className="avg-label">Количество дней в периоде</span>
-              <span className="avg-value">{/* количество дней вычисляется вне компонента */}</span>
-            </div>
           </div>
         </div>
 
@@ -134,7 +141,9 @@ export const StatsDashboard = ({
               weekdayStats.map(({ name, value }) => (
                 <div key={name} className="bar-item">
                   <span className="bar-label">{name}</span>
-                  <div className="bar-track"><div className="bar-fill expense-fill" style={{ width: `${(value / maxWeekday) * 100}%` }} /></div>
+                  <div className="bar-track">
+                    <div className="bar-fill expense-fill" style={{ width: `${(value / maxWeekday) * 100}%` }} />
+                  </div>
                   <span className="bar-value">{formatMoney(value)}</span>
                 </div>
               ))}
@@ -164,4 +173,4 @@ export const StatsDashboard = ({
       </div>
     </section>
   )
-}
+})
